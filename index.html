@@ -3,711 +3,727 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LP RESTORATION CALENDAR</title>
-    <!-- Tailwind CSS CDN -->
+    <title>LP Restoration Calendar</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- html2pdf Library -->
+    <!-- html2pdf.js para exportación -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- Firebase App y Firestore (SDK v8 Compatibilidad) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        .bg-company-lightblue { background-color: #E0F2FE; border-color: #38BDF8; text-color: #0369A1; }
-        .bg-company-lightgreen { background-color: #DCFCE7; border-color: #4ADE80; text-color: #15803D; }
-        .bg-company-lightyellow { background-color: #FEF9C3; border-color: #FACC15; text-color: #A16207; }
-        .bg-company-lightorange { background-color: #FFEDD5; border-color: #FB923C; text-color: #C2410C; }
-        .bg-company-lightpurple { background-color: #F3E8FF; border-color: #C084FC; text-color: #7E22CE; }
-        .bg-company-lightpink { background-color: #FCE7F3; border-color: #F472B6; text-color: #BE185D; }
-        .bg-company-lightgray { background-color: #F3F4F6; border-color: #9CA3AF; text-color: #374151; }
-        .bg-company-lightteal { background-color: #CCFBF1; border-color: #2DD4BF; text-color: #0F766E; }
-        
-        /* Print Styles */
         @media print {
             body * { visibility: hidden; }
-            #pdfPrintArea, #pdfPrintArea * { visibility: visible; }
-            #pdfPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+            #printable-area, #printable-area * { visibility: visible; }
+            #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
             .no-print { display: none !important; }
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
 
-    <!-- TOP HEADER -->
-    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+    <!-- BARRA DE NAVEGACIÓN COMPACTA -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-40 no-print">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-2">
             <div class="flex items-center space-x-3">
-                <i class="fa-solid me-2 fa-calendar-check text-sky-400 text-2xl"></i>
-                <h1 class="font-bold text-xl tracking-wide uppercase">LP Restoration Calendar</h1>
+                <i class="fa-solid fa-calendar-days text-amber-500 text-2xl"></i>
+                <h1 class="text-xl font-bold tracking-wide">LP Restoration Calendar</h1>
             </div>
             
-            <!-- Cloud Status Indicator -->
-            <div class="flex items-center space-x-4 text-xs">
-                <div id="syncStatus" class="flex items-center space-x-1 text-emerald-400">
-                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span id="syncStatusText">Synced</span>
-                </div>
+            <div class="flex items-center space-x-2">
+                <!-- Estado de Sincronización -->
+                <span id="sync-status" class="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sincronizado
+                </span>
                 
-                <button onclick="toggleAuthModal()" id="authBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded flex items-center gap-2">
-                    <i class="fa-solid fa-cloud"></i>
-                    <span id="authBtnText">Cloud Config</span>
-                </button>
+                <!-- Pestañas de Navegación -->
+                <nav class="flex bg-slate-800 rounded-lg p-1 text-sm font-medium">
+                    <button onclick="switchTab('calendar')" id="tab-calendar" class="px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 font-semibold transition">
+                        <i class="fa-solid fa-calendar mr-1"></i> Calendario
+                    </button>
+                    <button onclick="switchTab('workers')" id="tab-workers" class="px-3 py-1.5 rounded-md text-slate-300 hover:text-white transition">
+                        <i class="fa-solid fa-users mr-1"></i> Trabajadores
+                    </button>
+                    <button onclick="switchTab('history')" id="tab-history" class="px-3 py-1.5 rounded-md text-slate-300 hover:text-white transition">
+                        <i class="fa-solid fa-clock-rotate-left mr-1"></i> Historial
+                    </button>
+                </nav>
             </div>
         </div>
-
-        <!-- MAIN NAVIGATION -->
-        <nav class="bg-slate-800 border-t border-slate-700 text-sm">
-            <div class="max-w-7xl mx-auto px-4 flex space-x-1 overflow-x-auto">
-                <button onclick="switchTab('calendar')" id="nav-calendar" class="px-4 py-2.5 font-medium border-b-2 border-sky-400 text-sky-400 flex items-center gap-2 whitespace-nowrap">
-                    <i class="fa-solid fa-calendar-days"></i> Calendar
-                </button>
-                <button onclick="switchTab('workers')" id="nav-workers" class="px-4 py-2.5 font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 whitespace-nowrap">
-                    <i class="fa-solid fa-users"></i> Workers
-                </button>
-                <button onclick="switchTab('companies')" id="nav-companies" class="px-4 py-2.5 font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 whitespace-nowrap">
-                    <i class="fa-solid fa-building"></i> Companies
-                </button>
-                <button onclick="switchTab('history')" id="nav-history" class="px-4 py-2.5 font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 whitespace-nowrap">
-                    <i class="fa-solid fa-clock-rotate-left"></i> Job History
-                </button>
-            </div>
-        </nav>
     </header>
 
-    <!-- MAIN CONTENT CONTAINER -->
-    <main class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-6">
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="max-w-7xl mx-auto p-4 md:p-6">
 
-        <!-- ==================== VIEW 1: CALENDAR & DAY WORKS ==================== -->
-        <div id="view-calendar" class="space-y-6">
-            <!-- Calendar Controls Header -->
-            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div class="flex items-center space-x-3">
-                    <h2 id="currentMonthYear" class="text-2xl font-bold text-slate-800">October 2026</h2>
-                    <div class="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
-                        <button onclick="changeMonth(-1)" class="p-1.5 hover:bg-white rounded text-slate-600 transition"><i class="fa-solid fa-chevron-left"></i></button>
-                        <button onclick="goToToday()" class="px-3 py-1 font-semibold text-xs hover:bg-white rounded text-slate-700 transition">TODAY</button>
-                        <button onclick="changeMonth(1)" class="p-1.5 hover:bg-white rounded text-slate-600 transition"><i class="fa-solid fa-chevron-right"></i></button>
-                    </div>
+        <!-- SECCIÓN 1: VISTA DE CALENDARIO -->
+        <section id="view-calendar" class="space-y-6">
+            <!-- Barra Superior del Calendario -->
+            <div class="flex flex-wrap justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200 no-print">
+                <div class="flex items-center space-x-4">
+                    <button onclick="changeMonth(-1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition"><i class="fa-solid fa-chevron-left text-lg"></i></button>
+                    <h2 id="current-month-display" class="text-xl font-bold text-slate-800 min-w-[180px] text-center">---</h2>
+                    <button onclick="changeMonth(1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition"><i class="fa-solid fa-chevron-right text-lg"></i></button>
                 </div>
-
-                <!-- Global Filters -->
-                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                    <select id="filterCompany" onchange="renderCalendar()" class="bg-slate-50 border border-slate-300 text-xs rounded-lg p-2 focus:ring-sky-500 focus:border-sky-500">
-                        <option value="ALL">All Companies</option>
-                    </select>
-                    <select id="filterShift" onchange="renderCalendar()" class="bg-slate-50 border border-slate-300 text-xs rounded-lg p-2 focus:ring-sky-500 focus:border-sky-500">
-                        <option value="ALL">All Shifts</option>
-                        <option value="DAY">DAY</option>
-                        <option value="NIGHT">NIGHT</option>
-                    </select>
+                <div class="flex items-center gap-2">
+                    <button onclick="goToToday()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-sm transition">
+                        Hoy
+                    </button>
+                    <button onclick="openModal()" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-sm shadow transition flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i> Nuevo Trabajo
+                    </button>
                 </div>
             </div>
 
-            <!-- Calendar Grid -->
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="grid grid-cols-7 bg-slate-100 border-b border-slate-200 text-center font-bold text-xs text-slate-600 uppercase py-2">
-                    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            <!-- Grilla de Calendario Mensual -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
+                <div class="grid grid-cols-7 bg-slate-800 text-white text-center font-bold text-xs py-2 uppercase tracking-wider">
+                    <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
                 </div>
-                <div id="calendarGrid" class="grid grid-cols-7 auto-rows-fr gap-px bg-slate-200">
-                    <!-- Days injected dynamically -->
+                <div id="calendar-days" class="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
+                    <!-- Días del mes generados por JS -->
                 </div>
             </div>
 
-            <!-- SELECTED DAY EXPANDED PANEL -->
-            <div id="dayExpandedView" class="bg-white rounded-xl shadow-md border border-slate-200 p-6 space-y-6 hidden">
-                <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-slate-100 pb-4">
+            <!-- ÁREA DE DETALLE Y REPORTES DEL DÍA SELECCIONADO -->
+            <div id="day-detail-section" class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-6">
+                <div class="flex flex-wrap justify-between items-center pb-4 border-b border-slate-200 gap-4">
                     <div>
-                        <div class="flex items-center gap-3">
-                            <h3 id="selectedDayTitle" class="text-2xl font-extrabold text-slate-900">October 3, 2026</h3>
-                            <span id="selectedDayBadge" class="bg-sky-100 text-sky-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">0 Jobs</span>
+                        <h3 id="selected-date-display" class="text-2xl font-bold text-slate-900">Selecciona una fecha</h3>
+                        <p class="text-sm text-slate-500">Resumen de turnos y trabajadores asignados</p>
+                    </div>
+                    <div class="flex gap-2 no-print">
+                        <button onclick="exportToPDF()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg text-sm transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-pdf"></i> Exportar PDF
+                        </button>
+                        <button onclick="window.print()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-lg text-sm transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-print"></i> Imprimir
+                        </button>
+                    </div>
+                </div>
+
+                <!-- NOTAS DIARIAS -->
+                <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 no-print">
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Notas del Día (General):</label>
+                    <textarea id="daily-notes-input" onchange="saveDailyNotes()" rows="2" placeholder="Escribe notas generales para esta fecha..." class="w-full text-sm p-2.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-amber-500 outline-none resize-none"></textarea>
+                </div>
+
+                <!-- CONTENEDOR IMPRIMIBLE DE TRABAJOS (DÍA / NOCHE) -->
+                <div id="printable-area" class="space-y-6">
+                    <div id="print-header" class="hidden mb-4 border-b pb-2">
+                        <h1 class="text-xl font-bold">LP RESTORATION - REPORT DE TRABAJOS</h1>
+                        <p id="print-date" class="text-sm text-slate-600"></p>
+                        <p id="print-notes" class="text-sm italic mt-1 text-slate-700"></p>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <!-- TURNOS DE DÍA -->
+                        <div class="border border-amber-200 rounded-xl bg-amber-50/30 p-4">
+                            <div class="flex items-center space-x-2 text-amber-800 font-bold border-b border-amber-200 pb-2 mb-4">
+                                <i class="fa-solid fa-sun text-lg"></i>
+                                <h4 class="uppercase tracking-wide">Turno Día (Day Works)</h4>
+                            </div>
+                            <div id="day-jobs-container" class="space-y-4">
+                                <!-- Lista de trabajos de día -->
+                            </div>
                         </div>
-                        <p id="selectedDaySubTitle" class="text-sm text-slate-500 mt-0.5">Saturday Work Schedule</p>
-                    </div>
 
-                    <!-- Day Actions -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button onclick="openJobModal()" class="bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition">
-                            <i class="fa-solid fa-plus"></i> Add Job
-                        </button>
-                        <button onclick="generateDailyPDF()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition">
-                            <i class="fa-solid fa-file-pdf"></i> Download PDF
-                        </button>
-                        <button onclick="printDailyPDF()" class="bg-slate-700 hover:bg-slate-800 text-white font-medium text-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition">
-                            <i class="fa-solid fa-print"></i> Print
-                        </button>
-                        <button onclick="copyDayJobs()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm px-3 py-2 rounded-lg flex items-center gap-2 transition border border-slate-300">
-                            <i class="fa-regular fa-copy"></i> Copy Day
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Daily Notes Section -->
-                <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">
-                        <i class="fa-regular fa-note-sticky me-1"></i> Daily Notes
-                    </label>
-                    <textarea id="dailyNotesInput" onchange="saveDailyNotes()" placeholder="Add general notes for this day..." class="w-full text-sm bg-white border border-slate-300 rounded-md p-2 focus:ring-sky-500 focus:border-sky-500" rows="2"></textarea>
-                </div>
-
-                <!-- DAY WORKS SECTION -->
-                <div class="space-y-3">
-                    <div class="flex items-center gap-2 text-amber-600 border-b border-amber-200 pb-2">
-                        <i class="fa-solid fa-sun text-lg"></i>
-                        <h4 class="font-bold text-md uppercase tracking-wider">DAY WORKS</h4>
-                    </div>
-                    <div id="dayWorksContainer" class="space-y-3">
-                        <!-- Day Job Cards -->
-                    </div>
-                </div>
-
-                <!-- NIGHT WORKS SECTION -->
-                <div class="space-y-3 pt-4">
-                    <div class="flex items-center gap-2 text-indigo-600 border-b border-indigo-200 pb-2">
-                        <i class="fa-solid fa-moon text-lg"></i>
-                        <h4 class="font-bold text-md uppercase tracking-wider">NIGHT WORKS</h4>
-                    </div>
-                    <div id="nightWorksContainer" class="space-y-3">
-                        <!-- Night Job Cards -->
+                        <!-- TURNOS DE NOCHE -->
+                        <div class="border border-indigo-200 rounded-xl bg-indigo-50/30 p-4">
+                            <div class="flex items-center space-x-2 text-indigo-900 font-bold border-b border-indigo-200 pb-2 mb-4">
+                                <i class="fa-solid fa-moon text-lg"></i>
+                                <h4 class="uppercase tracking-wide">Turno Noche (Night Works)</h4>
+                            </div>
+                            <div id="night-jobs-container" class="space-y-4">
+                                <!-- Lista de trabajos de noche -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- ==================== VIEW 2: WORKERS MASTER LIST ==================== -->
-        <div id="view-workers" class="space-y-6 hidden">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 class="text-xl font-bold text-slate-800">Master Worker Directory</h2>
-                    <p class="text-sm text-slate-500">Manage crew members, availability defaults, and driver privileges.</p>
+        <!-- SECCIÓN 2: GESTIÓN DE TRABAJADORES -->
+        <section id="view-workers" class="hidden space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 class="text-2xl font-bold text-slate-800 mb-4">Gestión de Personal</h2>
+                <div class="flex gap-2 mb-6">
+                    <input type="text" id="new-worker-input" placeholder="Nombre completo del trabajador..." class="flex-1 border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                    <button onclick="addWorker()" class="px-4 py-2 bg-slate-900 text-white font-semibold rounded-lg text-sm hover:bg-slate-800 transition">
+                        Añadir Trabajador
+                    </button>
                 </div>
-                <button onclick="openWorkerModal()" class="bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition">
-                    <i class="fa-solid fa-user-plus"></i> Add Worker
-                </button>
+                <div id="workers-list" class="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <!-- Lista de trabajadores -->
+                </div>
             </div>
+        </section>
 
-            <!-- Workers Table -->
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <!-- SECCIÓN 3: HISTORIAL GLOBAL -->
+        <section id="view-history" class="hidden space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-bold text-slate-800">Historial Global de Trabajos</h2>
+                    <input type="text" id="search-history" oninput="renderHistory()" placeholder="Buscar por dirección o cliente..." class="border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none w-72">
+                </div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm text-slate-600">
-                        <thead class="bg-slate-100 text-xs text-slate-700 uppercase font-semibold border-b border-slate-200">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-100 text-slate-700 uppercase text-xs font-bold border-b">
                             <tr>
-                                <th class="px-6 py-3">Full Name</th>
-                                <th class="px-6 py-3">Can Be Driver</th>
-                                <th class="px-6 py-3">Status</th>
-                                <th class="px-6 py-3 text-right">Actions</th>
+                                <th class="p-3">Fecha</th>
+                                <th class="p-3">Turno</th>
+                                <th class="p-3">Ubicación / Título</th>
+                                <th class="p-3">Trabajadores</th>
+                                <th class="p-3 text-right">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody id="workersTableBody" class="divide-y divide-slate-200">
-                            <!-- Dynamic Content -->
+                        <tbody id="history-table-body" class="divide-y divide-slate-100">
+                            <!-- Filas del historial -->
                         </tbody>
                     </table>
                 </div>
             </div>
-        </div>
-
-        <!-- ==================== VIEW 3: COMPANIES MANAGEMENT ==================== -->
-        <div id="view-companies" class="space-y-6 hidden">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 class="text-xl font-bold text-slate-800">Company Management</h2>
-                    <p class="text-sm text-slate-500">Configure property restoration clients and assigned identifier colors.</p>
-                </div>
-                <button onclick="openCompanyModal()" class="bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition">
-                    <i class="fa-solid fa-building-circle-plus"></i> Add Company
-                </button>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="companiesGrid">
-                <!-- Dynamic Company Cards -->
-            </div>
-        </div>
-
-        <!-- ==================== VIEW 4: JOB HISTORY & SEARCH ==================== -->
-        <div id="view-history" class="space-y-6 hidden">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
-                <h2 class="text-xl font-bold text-slate-800">Global Job History & Search</h2>
-                
-                <!-- Filters -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <input type="text" id="searchQuery" oninput="renderHistoryTable()" placeholder="Search address, notes, job ID..." class="bg-slate-50 border border-slate-300 text-sm rounded-lg p-2.5 focus:ring-sky-500 focus:border-sky-500">
-                    <select id="historyFilterCompany" onchange="renderHistoryTable()" class="bg-slate-50 border border-slate-300 text-sm rounded-lg p-2.5">
-                        <option value="ALL">All Companies</option>
-                    </select>
-                    <select id="historyFilterWorker" onchange="renderHistoryTable()" class="bg-slate-50 border border-slate-300 text-sm rounded-lg p-2.5">
-                        <option value="ALL">All Workers</option>
-                    </select>
-                    <select id="historyFilterStatus" onchange="renderHistoryTable()" class="bg-slate-50 border border-slate-300 text-sm rounded-lg p-2.5">
-                        <option value="ALL">All Statuses</option>
-                        <option value="PENDING">PENDING</option>
-                        <option value="IN PROGRESS">IN PROGRESS</option>
-                        <option value="COMPLETED">COMPLETED</option>
-                        <option value="CONTINUES TOMORROW">CONTINUES TOMORROW</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm text-slate-600">
-                        <thead class="bg-slate-100 text-xs text-slate-700 uppercase font-semibold border-b border-slate-200">
-                            <tr>
-                                <th class="px-4 py-3">Date</th>
-                                <th class="px-4 py-3">Shift</th>
-                                <th class="px-4 py-3">Company</th>
-                                <th class="px-6 py-3">Address</th>
-                                <th class="px-4 py-3">Workers</th>
-                                <th class="px-4 py-3">Status</th>
-                                <th class="px-4 py-3 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historyTableBody" class="divide-y divide-slate-200">
-                            <!-- Dynamic Content -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        </section>
 
     </main>
 
-    <!-- ==================== MODALS ==================== -->
-
-    <!-- JOB FORM MODAL -->
-    <div id="jobModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-200">
-            <div class="bg-slate-900 text-white p-4 px-6 flex justify-between items-center rounded-t-xl">
-                <h3 id="jobModalTitle" class="font-bold text-lg">Add New Restoration Job</h3>
-                <button onclick="closeJobModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+    <!-- MODAL PARA CREAR / EDITAR TRABAJO -->
+    <div id="job-modal" class="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+                <h3 id="modal-title" class="font-bold text-lg">Nuevo Trabajo</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
             </div>
+            
+            <form id="job-form" onsubmit="handleJobSubmit(event)" class="p-6 space-y-4 overflow-y-auto">
+                <input type="hidden" id="job-id">
+                
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Título del Proyecto / Cliente</label>
+                    <input type="text" id="job-title" required placeholder="Ej. Restauración Comercial #102" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                </div>
 
-            <form id="jobForm" onsubmit="handleJobSubmit(event)" class="p-6 space-y-4">
-                <input type="hidden" id="jobId">
-                <input type="hidden" id="jobDate">
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Company *</label>
-                        <select id="jobCompanyId" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-sky-500 focus:border-sky-500">
-                            <!-- Options injected -->
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Fecha</label>
+                        <input type="date" id="job-date" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Turno</label>
+                        <select id="job-shift" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                            <option value="day">Día (Day)</option>
+                            <option value="night">Noche (Night)</option>
                         </select>
                     </div>
+                </div>
 
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Shift</label>
-                        <div class="flex items-center space-x-4 bg-slate-50 p-2.5 rounded-lg border border-slate-300">
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="checkbox" id="jobNightWork" onchange="renderWorkerSelectionLists()" class="sr-only peer">
-                                <div class="relative w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                <span id="shiftLabel" class="ms-3 text-sm font-semibold text-slate-800">DAY SHIFT</span>
-                            </label>
-                        </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Dirección / Ubicación</label>
+                    <input type="text" id="job-address" placeholder="Ej. 123 Main St, Toronto" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Asignar Trabajadores</label>
+                    <div id="modal-workers-selector" class="border border-slate-300 rounded-lg p-3 max-h-36 overflow-y-auto space-y-2 bg-slate-50 text-sm">
+                        <!-- Lista de checkboxes de trabajadores -->
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Address *</label>
-                    <input type="text" id="jobAddress" required placeholder="e.g. 225 Davisville Ave" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-sky-500 focus:border-sky-500">
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Notas Públicas (Invisibles para clientes)</label>
+                    <textarea id="job-public-notes" rows="2" placeholder="Detalles de la tarea..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none"></textarea>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Work Notes (Appears in PDF)</label>
-                    <textarea id="jobWorkNotes" placeholder="Furniture restoration and cleaning details..." rows="3" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-sky-500 focus:border-sky-500"></textarea>
+                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Notas Internas / Privadas</label>
+                    <textarea id="job-private-notes" rows="2" placeholder="Acceso, códigos, notas de administración..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none resize-none bg-amber-50/50"></textarea>
                 </div>
 
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Internal Notes (Private / Admin Only)</label>
-                    <textarea id="jobInternalNotes" placeholder="Private internal codes, cost estimates, or instructions..." rows="2" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-sky-500 focus:border-sky-500"></textarea>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Status</label>
-                    <select id="jobStatus" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-sky-500 focus:border-sky-500">
-                        <option value="PENDING">PENDING</option>
-                        <option value="IN PROGRESS">IN PROGRESS</option>
-                        <option value="COMPLETED">COMPLETED</option>
-                        <option value="CONTINUES TOMORROW">CONTINUES TOMORROW</option>
-                    </select>
-                </div>
-
-                <!-- WORKER ASSIGNMENT AREA -->
-                <div class="border-t border-slate-200 pt-4 space-y-3">
-                    <h4 class="text-sm font-bold text-slate-800 flex items-center justify-between">
-                        <span>Worker Assignments</span>
-                        <span class="text-xs font-normal text-slate-500">Alphabetically Sorted</span>
-                    </h4>
-
-                    <!-- Conflict Warning Box -->
-                    <div id="conflictWarning" class="p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-xs hidden flex items-center justify-between">
-                        <span id="conflictMessage">Worker has a schedule conflict.</span>
-                        <label class="inline-flex items-center cursor-pointer ml-2">
-                            <input type="checkbox" id="forceAssignmentCheck" class="rounded text-amber-600 border-amber-300 focus:ring-amber-500">
-                            <span class="ms-1.5 font-bold text-amber-900">Force Assign</span>
-                        </label>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Available Workers -->
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                            <span class="text-xs font-bold text-emerald-700 block mb-2 uppercase">Available Workers</span>
-                            <div id="availableWorkersList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                                <!-- Dynamic check items -->
-                            </div>
-                        </div>
-
-                        <!-- Unavailable / Assigned elsewhere Workers -->
-                        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                            <span class="text-xs font-bold text-slate-500 block mb-2 uppercase">Unavailable / Assigned</span>
-                            <div id="unavailableWorkersList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                                <!-- Dynamic items -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex justify-end space-x-3 border-t border-slate-100 pt-4">
-                    <button type="button" onclick="closeJobModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 text-sm font-medium">Cancel</button>
-                    <button type="submit" class="px-5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-sm font-medium shadow-sm">Save Job</button>
+                <div class="pt-4 flex justify-end space-x-2 border-t border-slate-100">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-sm transition">Guardar Trabajo</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- WORKER FORM MODAL -->
-    <div id="workerModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full border border-slate-200">
-            <div class="bg-slate-900 text-white p-4 px-6 flex justify-between items-center rounded-t-xl">
-                <h3 id="workerModalTitle" class="font-bold text-lg">Add Worker</h3>
-                <button onclick="closeWorkerModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="workerForm" onsubmit="handleWorkerSubmit(event)" class="p-6 space-y-4">
-                <input type="hidden" id="workerId">
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Full Name *</label>
-                    <input type="text" id="workerName" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-sky-500 focus:border-sky-500">
-                </div>
-                <div class="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <span class="text-sm font-medium text-slate-700">Can Be Driver?</span>
-                    <select id="workerCanBeDriver" class="bg-white border border-slate-300 rounded-md text-sm p-1.5">
-                        <option value="YES">YES</option>
-                        <option value="NO">NO</option>
-                    </select>
-                </div>
-                <div class="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <span class="text-sm font-medium text-slate-700">Active Status</span>
-                    <select id="workerActive" class="bg-white border border-slate-300 rounded-md text-sm p-1.5">
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
-                </div>
-                <div class="flex justify-end space-x-3 pt-2">
-                    <button type="button" onclick="closeWorkerModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 text-sm">Cancel</button>
-                    <button type="submit" class="px-5 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium">Save Worker</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- COMPANY FORM MODAL -->
-    <div id="companyModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full border border-slate-200">
-            <div class="bg-slate-900 text-white p-4 px-6 flex justify-between items-center rounded-t-xl">
-                <h3 id="companyModalTitle" class="font-bold text-lg">Add Company</h3>
-                <button onclick="closeCompanyModal()" class="text-slate-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <form id="companyForm" onsubmit="handleCompanySubmit(event)" class="p-6 space-y-4">
-                <input type="hidden" id="companyId">
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Company Name *</label>
-                    <input type="text" id="companyName" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm focus:ring-sky-500 focus:border-sky-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold uppercase text-slate-600 mb-1">Color Palette</label>
-                    <select id="companyColor" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm">
-                        <option value="Light Blue">Light Blue</option>
-                        <option value="Light Green">Light Green</option>
-                        <option value="Light Yellow">Light Yellow</option>
-                        <option value="Light Orange">Light Orange</option>
-                        <option value="Light Purple">Light Purple</option>
-                        <option value="Light Pink">Light Pink</option>
-                        <option value="Light Gray">Light Gray</option>
-                        <option value="Light Teal">Light Teal</option>
-                    </select>
-                </div>
-                <div class="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <span class="text-sm font-medium text-slate-700">Active Status</span>
-                    <select id="companyActive" class="bg-white border border-slate-300 rounded-md text-sm p-1.5">
-                        <option value="true">Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
-                </div>
-                <div class="flex justify-end space-x-3 pt-2">
-                    <button type="button" onclick="closeCompanyModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 text-sm">Cancel</button>
-                    <button type="submit" class="px-5 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium">Save Company</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- SUPABASE CONFIG MODAL -->
-    <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full border border-slate-200 p-6 space-y-4">
-            <h3 class="font-bold text-lg text-slate-800 border-b border-slate-100 pb-2">Supabase Cloud Database Settings</h3>
-            <p class="text-xs text-slate-500">Enter your Supabase project credentials to enable real cloud persistence and cross-device sync. If left empty, local storage memory fallback is active.</p>
-            <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Supabase URL</label>
-                <input type="text" id="supabaseUrlInput" placeholder="https://your-project.supabase.co" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Supabase Anon Key</label>
-                <input type="password" id="supabaseKeyInput" placeholder="your-anon-key" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-sm">
-            </div>
-            <div class="flex justify-end space-x-2 pt-2">
-                <button onclick="toggleAuthModal()" class="px-4 py-2 border rounded-lg text-sm">Close</button>
-                <button onclick="saveSupabaseConfig()" class="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm">Connect Cloud</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- HIDDEN PDF PRINT TEMPLATE CONTAINER -->
-    <div class="hidden">
-        <div id="pdfPrintArea" class="p-8 bg-white text-slate-900 max-w-2xl mx-auto space-y-6">
-            <div class="border-b-2 border-slate-900 pb-4 text-center">
-                <h1 class="text-2xl font-black uppercase tracking-wider text-slate-900">LP RESTORATION CALENDAR</h1>
-                <h2 class="text-lg font-bold text-slate-700 tracking-wide mt-1">DAILY WORK SCHEDULE</h2>
-                <p id="pdfDateHeader" class="text-md font-semibold text-sky-700 mt-1">October 3, 2026</p>
-            </div>
-
-            <div id="pdfDailyNotesSection" class="bg-slate-50 p-3 rounded border border-slate-200 hidden">
-                <h4 class="text-xs font-bold uppercase text-slate-500 mb-1">Daily Notes</h4>
-                <p id="pdfDailyNotesText" class="text-sm italic text-slate-700"></p>
-            </div>
-
-            <div id="pdfJobsList" class="space-y-6">
-                <!-- PDF Clean Job Blocks Injected -->
-            </div>
-        </div>
-    </div>
-
-    <!-- APPLICATION JAVASCRIPT LOGIC -->
+    <!-- CONFIGURACIÓN DE FIREBASE Y LÓGICA JAVASCRIPT DE SINCRONIZACIÓN -->
     <script>
-        // Default Master Data Initialization
-        const INITIAL_WORKERS = [
-            "Aaron Dzib", "Antonio Romero", "Belcy Nuñez", "Brayan Muñoz", "Camilo Rocha v",
-            "Christiam Rivas", "Daniel Torrealba", "Daniela Sira", "David Herrera", "Edgar Bastardo",
-            "Ernesto Polanco", "Gabriela Matos", "Giovanny Duran", "Hernan Riofrio", "Isidro Muñoz",
-            "Jair Martinez", "Jaqueline Ramirez", "Jose Hernandez", "Juan Archila", "Juan Fiorillo",
-            "Karen Ochoa", "Maria Carreras", "Martha Gonzalez", "Rafael Herrera Morales", "Vania Arroyo", "Victor Moreno"
-        ];
-
-        const COLOR_MAP = {
-            'Light Blue': 'bg-sky-100 border-sky-400 text-sky-900',
-            'Light Green': 'bg-emerald-100 border-emerald-400 text-emerald-900',
-            'Light Yellow': 'bg-amber-100 border-amber-400 text-amber-900',
-            'Light Orange': 'bg-orange-100 border-orange-400 text-orange-900',
-            'Light Purple': 'bg-purple-100 border-purple-400 text-purple-900',
-            'Light Pink': 'bg-pink-100 border-pink-400 text-pink-900',
-            'Light Gray': 'bg-slate-200 border-slate-400 text-slate-800',
-            'Light Teal': 'bg-teal-100 border-teal-400 text-teal-900'
+        // 1. Configuración del proyecto Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDummyKey_ReplaceWithYourActualKeyIfDifferent",
+            authDomain: "lp-restoration.firebaseapp.com",
+            projectId: "lp-restoration",
+            storageBucket: "lp-restoration.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:abc123def456"
         };
 
-        // Application State
-        let dbWorkers = [];
-        let dbCompanies = [];
-        let dbJobs = [];
-        let dbDailyNotes = {};
-
-        let currentDate = new Date(2026, 9, 3); // Default Toronto Time baseline: Oct 3, 2026
-        let selectedDateStr = "2026-10-03";
-        let supabaseClient = null;
-
-        // --- Alphabetical Helper Function ---
-        function sortAlphabetically(list, key = null) {
-            return list.sort((a, b) => {
-                const valA = key ? a[key] : a;
-                const valB = key ? b[key] : b;
-                return valA.localeCompare(valB, 'en', { sensitivity: 'base' });
-            });
+        // Inicializar Firebase Firestore
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
         }
+        const db = firebase.firestore();
 
-        // --- Core Startup Initialization ---
-        window.addEventListener('DOMContentLoaded', async () => {
-            initSupabase();
-            loadLocalStorageData();
+        // Estructura de estado global en memoria
+        let jobs = [];
+        let workers = [];
+        let dailyNotes = {};
+        
+        let currentDate = new Date();
+        let selectedDateStr = formatDate(new Date());
+
+        // Inicialización al cargar el DOM
+        document.addEventListener("DOMContentLoaded", () => {
+            initFirebaseListeners();
             renderCalendar();
-            selectDay(selectedDateStr);
-            renderWorkersTable();
-            renderCompaniesGrid();
-            populateCompanyDropdowns();
+            setSelectedDate(selectedDateStr);
         });
 
-        // Supabase Configuration Management
-        function initSupabase() {
-            const url = localStorage.getItem('lp_supa_url');
-            const key = localStorage.getItem('lp_supa_key');
-            if (url && key && window.supabase) {
-                supabaseClient = window.supabase.createClient(url, key);
-                document.getElementById('syncStatusText').innerText = "Cloud Connected";
-                document.getElementById('syncStatus').className = "flex items-center space-x-1 text-emerald-400";
-                syncFromCloud();
-            } else {
-                document.getElementById('syncStatusText').innerText = "Local Storage Mode";
-                document.getElementById('syncStatus').className = "flex items-center space-x-1 text-amber-400";
-            }
-        }
+        // 2. Escuchadores en tiempo real (Sincronización multi-dispositivo y multi-red)
+        function initFirebaseListeners() {
+            const syncStatusEl = document.getElementById("sync-status");
 
-        function toggleAuthModal() {
-            document.getElementById('authModal').classList.toggle('hidden');
-        }
-
-        function saveSupabaseConfig() {
-            const url = document.getElementById('supabaseUrlInput').value.trim();
-            const key = document.getElementById('supabaseKeyInput').value.trim();
-            localStorage.setItem('lp_supa_url', url);
-            localStorage.setItem('lp_supa_key', key);
-            toggleAuthModal();
-            initSupabase();
-        }
-
-        // Local Storage Sync Fallback
-        function loadLocalStorageData() {
-            const savedWorkers = localStorage.getItem('lp_workers');
-            if (savedWorkers) {
-                dbWorkers = JSON.parse(savedWorkers);
-            } else {
-                // Initialize default 26 workers
-                dbWorkers = INITIAL_WORKERS.map((name, idx) => ({
-                    id: 'w_' + (idx + 1),
-                    name: name,
-                    canBeDriver: true,
-                    active: true
-                }));
-            }
-            sortAlphabetically(dbWorkers, 'name');
-
-            const savedCompanies = localStorage.getItem('lp_companies');
-            if (savedCompanies) {
-                dbCompanies = JSON.parse(savedCompanies);
-            } else {
-                dbCompanies = [
-                    { id: 'c_1', name: 'ONSIDE', color: 'Light Blue', active: true },
-                    { id: 'c_2', name: 'ABC RESTORATION', color: 'Light Green', active: true }
-                ];
-            }
-
-            const savedJobs = localStorage.getItem('lp_jobs');
-            dbJobs = savedJobs ? JSON.parse(savedJobs) : [];
-
-            const savedNotes = localStorage.getItem('lp_daily_notes');
-            dbDailyNotes = savedNotes ? JSON.parse(savedNotes) : {};
-        }
-
-        function saveState() {
-            sortAlphabetically(dbWorkers, 'name');
-            localStorage.setItem('lp_workers', JSON.stringify(dbWorkers));
-            localStorage.setItem('lp_companies', JSON.stringify(dbCompanies));
-            localStorage.setItem('lp_jobs', JSON.stringify(dbJobs));
-            localStorage.setItem('lp_daily_notes', JSON.stringify(dbDailyNotes));
-
-            if (supabaseClient) {
-                syncToCloud();
-            }
-        }
-
-        async function syncToCloud() {
-            // Simplified Cloud Syncing logic
-            try {
-                document.getElementById('syncStatusText').innerText = "Saving...";
-                // Execute cloud upserts if tables are configured
-                document.getElementById('syncStatusText').innerText = "Cloud Synced";
-            } catch(e) {
-                console.error("Cloud Sync Error", e);
-                document.getElementById('syncStatusText').innerText = "Sync Error";
-            }
-        }
-
-        async function syncFromCloud() {
-            // Placeholder for Cloud Pull
-        }
-
-        // --- Navigation Tabs ---
-        function switchTab(tab) {
-            ['calendar', 'workers', 'companies', 'history'].forEach(t => {
-                document.getElementById(`view-${t}`).classList.add('hidden');
-                document.getElementById(`nav-${t}`).className = "px-4 py-2.5 font-medium border-b-2 border-transparent text-slate-400 hover:text-white flex items-center gap-2 whitespace-nowrap";
+            // Escuchar cambios en Trabajos
+            db.collection("jobs").onSnapshot((snapshot) => {
+                jobs = [];
+                snapshot.forEach((doc) => {
+                    jobs.push({ id: doc.id, ...doc.data() });
+                });
+                renderCalendar();
+                renderDayDetails();
+                renderHistory();
+                updateSyncBadge(true);
+            }, (error) => {
+                console.error("Error al sincronizar 'jobs':", error);
+                updateSyncBadge(false);
             });
 
-            document.getElementById(`view-${tab}`).classList.remove('hidden');
-            document.getElementById(`nav-${tab}`).className = "px-4 py-2.5 font-medium border-b-2 border-sky-400 text-sky-400 flex items-center gap-2 whitespace-nowrap";
+            // Escuchar cambios en Trabajadores
+            db.collection("workers").onSnapshot((snapshot) => {
+                workers = [];
+                snapshot.forEach((doc) => {
+                    workers.push({ id: doc.id, ...doc.data() });
+                });
+                // Orden alfabético por nombre
+                workers.sort((a, b) => a.name.localeCompare(b.name));
+                renderWorkersList();
+                renderDayDetails();
+                updateSyncBadge(true);
+            }, (error) => {
+                console.error("Error al sincronizar 'workers':", error);
+                updateSyncBadge(false);
+            });
 
-            if (tab === 'history') renderHistoryTable();
+            // Escuchar cambios en Notas Diarias
+            db.collection("dailyNotes").onSnapshot((snapshot) => {
+                dailyNotes = {};
+                snapshot.forEach((doc) => {
+                    dailyNotes[doc.id] = doc.data().note || "";
+                });
+                renderDayDetails();
+                updateSyncBadge(true);
+            }, (error) => {
+                console.error("Error al sincronizar 'dailyNotes':", error);
+                updateSyncBadge(false);
+            });
         }
 
-        // --- CALENDAR LOGIC ---
+        function updateSyncBadge(isOnline) {
+            const badge = document.getElementById("sync-status");
+            if (isOnline) {
+                badge.className = "text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Sincronizado`;
+            } else {
+                badge.className = "text-xs px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> Error Red`;
+            }
+        }
+
+        // 3. Funciones de Renderizado del Calendario
         function renderCalendar() {
-            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
 
-            document.getElementById('currentMonthYear').innerText = `${monthNames[month]} ${year}`;
+            const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            document.getElementById("current-month-display").innerText = `${monthNames[month]} ${year}`;
 
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-            const calendarGrid = document.getElementById('calendarGrid');
-            calendarGrid.innerHTML = '';
+            const container = document.getElementById("calendar-days");
+            container.innerHTML = "";
 
-            const selectedCompany = document.getElementById('filterCompany').value;
-            const selectedShift = document.getElementById('filterShift').value;
-
-            // Empty padding cells
+            // Días vacíos del mes anterior
             for (let i = 0; i < firstDay; i++) {
-                const cell = document.createElement('div');
-                cell.className = "bg-slate-50 border-b border-r border-slate-200 min-h-[90px]";
-                calendarGrid.appendChild(cell);
+                const emptyCell = document.createElement("div");
+                emptyCell.className = "bg-slate-50 min-h-[100px] p-1 border-b border-r border-slate-200/50";
+                container.appendChild(emptyCell);
             }
 
-            // Days of Month
+            // Días del mes
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayCell = document.createElement("div");
                 
-                // Filter jobs for this day
-                let dayJobs = dbJobs.filter(j => j.date === dateStr);
-                if (selectedCompany !== 'ALL') dayJobs = dayJobs.filter(j => j.companyId === selectedCompany);
-                if (selectedShift !== 'ALL') dayJobs = dayJobs.filter(j => (selectedShift === 'NIGHT' ? j.nightWork : !j.nightWork));
-
                 const isSelected = dateStr === selectedDateStr;
+                const isToday = dateStr === formatDate(new Date());
 
-                const cell = document.createElement('div');
-                cell.className = `bg-white border-b border-r border-slate-200 p-2 min-h-[90px] cursor-pointer hover:bg-sky-50 transition relative ${isSelected ? 'ring-2 ring-sky-500 bg-sky-50/50' : ''}`;
-                cell.onclick = () => selectDay(dateStr);
+                dayCell.className = `min-h-[100px] p-1.5 bg-white border-b border-r border-slate-200 cursor-pointer transition flex flex-col hover:bg-amber-50/50 ${
+                    isSelected ? 'ring-2 ring-amber-500 z-10' : ''
+                }`;
+                dayCell.onclick = () => setSelectedDate(dateStr);
 
-                let jobsBadgeHtml = '';
-                if (dayJobs.length > 0) {
-                    jobsBadgeHtml = `<span class="text-[10px] bg-sky-100 text-sky-800 font-bold px-1.5 py-0.5 rounded-full">${dayJobs.length}</span>`;
-                }
+                // Detección de trabajos en el día
+                const dayJobs = jobs.filter(j => j.date === dateStr);
+                const dayCount = dayJobs.filter(j => j.shift === 'day').length;
+                const nightCount = dayJobs.filter(j => j.shift === 'night').length;
 
-                let jobIndicators = dayJobs.slice(0, 3).map(j => {
-                    const comp = dbCompanies.find(c => c.id === j.companyId) || { name: 'Unknown', color: 'Light Gray' };
-                    const colorClass = COLOR_MAP[comp.color] || COLOR_MAP['Light Gray'];
-                    return `<div class="text-[10px] border-l-2 ${colorClass} truncate px-1 py-0.5 rounded mt-0.5 font-medium">${comp.name} - ${j.address}</div>`;
-                }).join('');
-
-                if (dayJobs.length > 3) {
-                    jobIndicators += `<div class="text-[9px] text-slate-400 font-bold mt-0.5">+${dayJobs.length - 3} more</div>`;
-                }
-
-                cell.innerHTML = `
+                dayCell.innerHTML = `
                     <div class="flex justify-between items-center mb-1">
-                        <span class="text-xs font-bold ${isSelected ? 'text-sky-600' : 'text-slate-700'}">${day}</span>
-                        ${jobsBadgeHtml}
+                        <span class="text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center ${
+                            isToday ? 'bg-amber-500 text-slate-950' : 'text-slate-700'
+                        }">${day}</span>
+                        ${dayJobs.length > 0 ? `<span class="text-[10px] font-extrabold bg-slate-800 text-white px-1.5 py-0.5 rounded">${dayJobs.length}</span>` : ''}
                     </div>
-                    <div class="space-y-0.5">${jobIndicators}</div>
+                    <div class="space-y-1 flex-1 overflow-hidden">
+                        ${dayCount > 0 ? `<div class="text-[10px] bg-amber-100 text-amber-900 border border-amber-200 px-1 py-0.5 rounded font-medium truncate"><i class="fa-solid fa-sun"></i> ${dayCount} Día</div>` : ''}
+                        ${nightCount > 0 ? `<div class="text-[10px] bg-indigo-100 text-indigo-900 border border-indigo-200 px-1 py-0.5 rounded font-medium truncate"><i class="fa-solid fa-moon"></i> ${nightCount} Noche</div>` : ''}
+                    </div>
                 `;
-
-                calendarGrid.appendChild(cell);
+                container.appendChild(dayCell);
             }
+        }
+
+        function setSelectedDate(dateStr) {
+            selectedDateStr = dateStr;
+            document.getElementById("selected-date-display").innerText = formatDateDisplay(dateStr);
+            document.getElementById("print-date").innerText = formatDateDisplay(dateStr);
+            
+            // Actualizar nota diaria local
+            const noteInput = document.getElementById("daily-notes-input");
+            noteInput.value = dailyNotes[dateStr] || "";
+            document.getElementById("print-notes").innerText = dailyNotes[dateStr] ? `Notas del día: ${dailyNotes[dateStr]}` : "";
+
+            renderCalendar();
+            renderDayDetails();
+        }
+
+        // 4. Renderizado del Detalle del Día
+        function renderDayDetails() {
+            const dayContainer = document.getElementById("day-jobs-container");
+            const nightContainer = document.getElementById("night-jobs-container");
+
+            dayContainer.innerHTML = "";
+            nightContainer.innerHTML = "";
+
+            const filteredJobs = jobs.filter(j => j.date === selectedDateStr);
+
+            const dayJobs = filteredJobs.filter(j => j.shift === 'day');
+            const nightJobs = filteredJobs.filter(j => j.shift === 'night');
+
+            if (dayJobs.length === 0) {
+                dayContainer.innerHTML = `<p class="text-xs text-slate-400 italic">No hay trabajos programados de día.</p>`;
+            } else {
+                dayJobs.forEach(job => dayContainer.appendChild(createJobCard(job)));
+            }
+
+            if (nightJobs.length === 0) {
+                nightContainer.innerHTML = `<p class="text-xs text-slate-400 italic">No hay trabajos programados de noche.</p>`;
+            } else {
+                nightJobs.forEach(job => nightContainer.appendChild(createJobCard(job)));
+            }
+        }
+
+        function createJobCard(job) {
+            const card = document.createElement("div");
+            card.className = "bg-white p-4 rounded-lg shadow-sm border border-slate-200 space-y-2 relative group";
+
+            // Buscar nombres de trabajadores asignados
+            const assignedWorkerNames = (job.workers || []).map(id => {
+                const w = workers.find(item => item.id === id);
+                return w ? w.name : id;
+            });
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start gap-2">
+                    <h5 class="font-bold text-slate-800 text-sm">${escapeHtml(job.title)}</h5>
+                    <div class="flex items-center space-x-1 no-print">
+                        <button onclick="continueTomorrow('${job.id}')" title="Continuar Mañana" class="p-1 hover:bg-amber-100 text-amber-700 rounded transition"><i class="fa-solid fa-forward"></i></button>
+                        <button onclick="openModal('${job.id}')" title="Editar" class="p-1 hover:bg-slate-100 text-slate-600 rounded transition"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteJobFirebase('${job.id}')" title="Eliminar" class="p-1 hover:bg-rose-100 text-rose-600 rounded transition"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+
+                ${job.address ? `<p class="text-xs text-slate-600"><i class="fa-solid fa-location-dot text-slate-400 mr-1"></i>${escapeHtml(job.address)}</p>` : ''}
+                
+                <div class="pt-1">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase block mb-1">Personal:</span>
+                    <div class="flex flex-wrap gap-1">
+                        ${assignedWorkerNames.length > 0 
+                            ? assignedWorkerNames.map(name => `<span class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">${escapeHtml(name)}</span>`).join('') 
+                            : '<span class="text-xs text-slate-400 italic">Sin asignar</span>'}
+                    </div>
+                </div>
+
+                ${job.publicNotes ? `<p class="text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 mt-2"><strong class="block text-[10px] text-slate-400 uppercase">Notas:</strong>${escapeHtml(job.publicNotes)}</p>` : ''}
+                ${job.privateNotes ? `<p class="text-xs text-amber-900 bg-amber-50 p-2 rounded border border-amber-200/60 mt-1 no-print"><strong class="block text-[10px] text-amber-700 uppercase"><i class="fa-solid fa-lock mr-1"></i>Privado:</strong>${escapeHtml(job.privateNotes)}</p>` : ''}
+            `;
+
+            return card;
+        }
+
+        // 5. CRUD de Trabajos en Firestore
+        function handleJobSubmit(e) {
+            e.preventDefault();
+            const jobId = document.getElementById("job-id").value;
+            
+            // Recoger checkboxes de trabajadores
+            const selectedWorkers = Array.from(document.querySelectorAll('#modal-workers-selector input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+
+            const jobData = {
+                title: document.getElementById("job-title").value.trim(),
+                date: document.getElementById("job-date").value,
+                shift: document.getElementById("job-shift").value,
+                address: document.getElementById("job-address").value.trim(),
+                workers: selectedWorkers,
+                publicNotes: document.getElementById("job-public-notes").value.trim(),
+                privateNotes: document.getElementById("job-private-notes").value.trim(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Detección de conflicto de trabajador en el mismo turno y fecha
+            const conflicts = [];
+            selectedWorkers.forEach(wId => {
+                const wObj = workers.find(x => x.id === wId);
+                const name = wObj ? wObj.name : wId;
+                const exists = jobs.find(j => j.id !== jobId && j.date === jobData.date && j.shift === jobData.shift && (j.workers || []).includes(wId));
+                if (exists) {
+                    conflicts.push(`${name} ya está asignado a "${exists.title}" en este turno.`);
+                }
+            });
+
+            if (conflicts.length > 0) {
+                if (!confirm(`Advertencia de duplicación:\n\n${conflicts.join('\n')}\n\n¿Deseas guardar de todos modos?`)) {
+                    return;
+                }
+            }
+
+            const docRef = jobId ? db.collection("jobs").doc(jobId) : db.collection("jobs").doc();
+            
+            docRef.set(jobData, { merge: true })
+                .then(() => {
+                    closeModal();
+                })
+                .catch(err => {
+                    alert("Error al guardar trabajo en Firebase: " + err.message);
+                });
+        }
+
+        function deleteJobFirebase(id) {
+            if (confirm("¿Estás seguro de que deseas eliminar este trabajo permanentemente?")) {
+                db.collection("jobs").doc(id).delete().catch(err => {
+                    alert("Error al eliminar trabajo: " + err.message);
+                });
+            }
+        }
+
+        function continueTomorrow(jobId) {
+            const currentJob = jobs.find(j => j.id === jobId);
+            if (!currentJob) return;
+
+            const currentDateObj = new Date(currentJob.date + "T00:00:00");
+            currentDateObj.setDate(currentDateObj.getDate() + 1);
+            const tomorrowStr = formatDate(currentDateObj);
+
+            const newJob = {
+                ...currentJob,
+                date: tomorrowStr,
+                title: `${currentJob.title} (Cont.)`,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            delete newJob.id;
+
+            db.collection("jobs").add(newJob)
+                .then(() => {
+                    alert(`Trabajo duplicado para el día de mañana (${tomorrowStr}).`);
+                })
+                .catch(err => {
+                    alert("Error al continuar trabajo: " + err.message);
+                });
+        }
+
+        // 6. Guardado de Notas Diarias en Firestore
+        function saveDailyNotes() {
+            const noteText = document.getElementById("daily-notes-input").value;
+            db.collection("dailyNotes").doc(selectedDateStr).set({
+                note: noteText,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).catch(err => {
+                console.error("Error al guardar notas diarias:", err);
+            });
+        }
+
+        // 7. Gestión de Trabajadores en Firestore
+        function addWorker() {
+            const input = document.getElementById("new-worker-input");
+            const name = input.value.trim();
+            if (!name) return;
+
+            db.collection("workers").add({
+                name: name,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                input.value = "";
+            }).catch(err => {
+                alert("Error al añadir trabajador: " + err.message);
+            });
+        }
+
+        function deleteWorker(id) {
+            if (confirm("¿Eliminar este trabajador de la base de datos?")) {
+                db.collection("workers").doc(id).delete().catch(err => {
+                    alert("Error al borrar trabajador: " + err.message);
+                });
+            }
+        }
+
+        function renderWorkersList() {
+            const container = document.getElementById("workers-list");
+            container.innerHTML = "";
+
+            if (workers.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 italic text-sm">No hay trabajadores registrados.</p>`;
+                return;
+            }
+
+            workers.forEach(w => {
+                const item = document.createElement("div");
+                item.className = "flex justify-between items-center bg-slate-50 border border-slate-200 p-3 rounded-lg";
+                item.innerHTML = `
+                    <span class="font-medium text-slate-800 text-sm"><i class="fa-solid fa-user text-slate-400 mr-2"></i>${escapeHtml(w.name)}</span>
+                    <button onclick="deleteWorker('${w.id}')" class="text-slate-400 hover:text-rose-600 transition"><i class="fa-solid fa-trash"></i></button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // 8. Renderizado del Historial
+        function renderHistory() {
+            const tbody = document.getElementById("history-table-body");
+            const query = (document.getElementById("search-history").value || "").toLowerCase();
+            tbody.innerHTML = "";
+
+            const filtered = jobs.filter(j => 
+                (j.title && j.title.toLowerCase().includes(query)) ||
+                (j.address && j.address.toLowerCase().includes(query))
+            ).sort((a,b) => b.date.localeCompare(a.date));
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400 italic">No se encontraron registros.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(job => {
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-slate-50";
+
+                const assignedWorkerNames = (job.workers || []).map(id => {
+                    const w = workers.find(item => item.id === id);
+                    return w ? w.name : id;
+                }).join(", ") || "Ninguno";
+
+                tr.innerHTML = `
+                    <td class="p-3 font-medium text-slate-700">${job.date}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 text-xs rounded font-bold ${job.shift === 'day' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'}">${job.shift === 'day' ? 'DÍA' : 'NOCHE'}</span></td>
+                    <td class="p-3 font-bold text-slate-800">${escapeHtml(job.title)} <span class="block text-xs font-normal text-slate-500">${escapeHtml(job.address || '')}</span></td>
+                    <td class="p-3 text-slate-600">${escapeHtml(assignedWorkerNames)}</td>
+                    <td class="p-3 text-right">
+                        <button onclick="openModal('${job.id}')" class="text-amber-600 hover:text-amber-800 font-bold text-xs mr-2"><i class="fa-solid fa-pen"></i> Editar</button>
+                        <button onclick="deleteJobFirebase('${job.id}')" class="text-rose-600 hover:text-rose-800 font-bold text-xs"><i class="fa-solid fa-trash"></i> Borrar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 9. Funciones del Modal
+        function openModal(jobId = null) {
+            const modal = document.getElementById("job-modal");
+            const form = document.getElementById("job-form");
+            form.reset();
+
+            // Cargar selector de trabajadores
+            const selector = document.getElementById("modal-workers-selector");
+            selector.innerHTML = "";
+
+            if (workers.length === 0) {
+                selector.innerHTML = `<p class="text-xs text-slate-400 italic">Agrega trabajadores primero en la pestaña 'Trabajadores'.</p>`;
+            } else {
+                workers.forEach(w => {
+                    const label = document.createElement("label");
+                    label.className = "flex items-center space-x-2 text-slate-700 cursor-pointer";
+                    label.innerHTML = `
+                        <input type="checkbox" value="${w.id}" class="rounded border-slate-300 text-amber-500 focus:ring-amber-500">
+                        <span>${escapeHtml(w.name)}</span>
+                    `;
+                    selector.appendChild(label);
+                });
+            }
+
+            if (jobId) {
+                const job = jobs.find(j => j.id === jobId);
+                if (job) {
+                    document.getElementById("modal-title").innerText = "Editar Trabajo";
+                    document.getElementById("job-id").value = job.id;
+                    document.getElementById("job-title").value = job.title;
+                    document.getElementById("job-date").value = job.date;
+                    document.getElementById("job-shift").value = job.shift;
+                    document.getElementById("job-address").value = job.address || "";
+                    document.getElementById("job-public-notes").value = job.publicNotes || "";
+                    document.getElementById("job-private-notes").value = job.privateNotes || "";
+
+                    // Marcar trabajadores asignados
+                    if (job.workers && Array.isArray(job.workers)) {
+                        const checkboxes = selector.querySelectorAll('input[type="checkbox"]');
+                        checkboxes.forEach(cb => {
+                            if (job.workers.includes(cb.value)) {
+                                cb.checked = true;
+                            }
+                        });
+                    }
+                }
+            } else {
+                document.getElementById("modal-title").innerText = "Nuevo Trabajo";
+                document.getElementById("job-id").value = "";
+                document.getElementById("job-date").value = selectedDateStr;
+            }
+
+            modal.classList.remove("hidden");
+        }
+
+        function closeModal() {
+            document.getElementById("job-modal").classList.add("hidden");
+        }
+
+        // 10. Control de Pestañas y Exportación a PDF
+        function switchTab(tab) {
+            ['calendar', 'workers', 'history'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                const tabBtn = document.getElementById(`tab-${t}`);
+                tabBtn.className = "px-3 py-1.5 rounded-md text-slate-300 hover:text-white transition";
+            });
+
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            const activeTabBtn = document.getElementById(`tab-${tab}`);
+            activeTabBtn.className = "px-3 py-1.5 rounded-md bg-amber-500 text-slate-950 font-semibold transition";
+
+            if (tab === 'history') renderHistory();
+            if (tab === 'workers') renderWorkersList();
         }
 
         function changeMonth(delta) {
@@ -716,700 +732,47 @@
         }
 
         function goToToday() {
-            currentDate = new Date(2026, 9, 3);
-            selectedDateStr = "2026-10-03";
-            renderCalendar();
-            selectDay(selectedDateStr);
+            currentDate = new Date();
+            setSelectedDate(formatDate(new Date()));
         }
 
-        function selectDay(dateStr) {
-            selectedDateStr = dateStr;
-            renderCalendar();
-
-            const dayExpandedView = document.getElementById('dayExpandedView');
-            dayExpandedView.classList.remove('hidden');
-
-            const dateParts = dateStr.split('-');
-            const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            document.getElementById('selectedDayTitle').innerText = dateObj.toLocaleDateString('en-US', options);
-            document.getElementById('selectedDaySubTitle').innerText = `${dateObj.toLocaleDateString('en-US', { weekday: 'long' })} Work Schedule`;
-
-            // Daily Notes
-            document.getElementById('dailyNotesInput').value = dbDailyNotes[selectedDateStr] || '';
-
-            renderDayJobs();
-        }
-
-        function saveDailyNotes() {
-            dbDailyNotes[selectedDateStr] = document.getElementById('dailyNotesInput').value;
-            saveState();
-        }
-
-        function renderDayJobs() {
-            const dayWorksContainer = document.getElementById('dayWorksContainer');
-            const nightWorksContainer = document.getElementById('nightWorksContainer');
-
-            dayWorksContainer.innerHTML = '';
-            nightWorksContainer.innerHTML = '';
-
-            const dayJobs = dbJobs.filter(j => j.date === selectedDateStr);
-            document.getElementById('selectedDayBadge').innerText = `${dayJobs.length} Jobs`;
-
-            const dayShifts = dayJobs.filter(j => !j.nightWork);
-            const nightShifts = dayJobs.filter(j => j.nightWork);
-
-            if (dayShifts.length === 0) {
-                dayWorksContainer.innerHTML = `<p class="text-xs text-slate-400 italic py-2">No DAY shift jobs scheduled for this date.</p>`;
-            } else {
-                dayShifts.forEach((job, index) => dayWorksContainer.appendChild(createJobCardElement(job, index + 1)));
-            }
-
-            if (nightShifts.length === 0) {
-                nightWorksContainer.innerHTML = `<p class="text-xs text-slate-400 italic py-2">No NIGHT shift jobs scheduled for this date.</p>`;
-            } else {
-                nightShifts.forEach((job, index) => nightWorksContainer.appendChild(createJobCardElement(job, index + 1)));
-            }
-        }
-
-        function createJobCardElement(job, indexNumber) {
-            const company = dbCompanies.find(c => c.id === job.companyId) || { name: 'UNKNOWN', color: 'Light Gray' };
-            const colorClass = COLOR_MAP[company.color] || COLOR_MAP['Light Gray'];
-
-            // Sort workers alphabetically
-            const assignedWorkerObjs = (job.workers || [])
-                .map(wId => dbWorkers.find(w => w.id === wId))
-                .filter(Boolean);
-            
-            sortAlphabetically(assignedWorkerObjs, 'name');
-
-            const workersListHtml = assignedWorkerObjs.map(w => {
-                const isDriver = (job.drivers || []).includes(w.id);
-                return `<li class="text-xs text-slate-700 flex items-center gap-1.5"><i class="fa-solid fa-user-check text-emerald-600"></i> ${w.name} ${isDriver ? '<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded border border-amber-300">— DRIVER</span>' : ''}</li>`;
-            }).join('');
-
-            const card = document.createElement('div');
-            card.className = `bg-white border-l-4 ${colorClass.split(' ')[1]} border-slate-200 border-y border-r rounded-lg shadow-sm p-4 space-y-3 relative`;
-
-            card.innerHTML = `
-                <div class="flex flex-col md:flex-row justify-between md:items-center gap-2 border-b border-slate-100 pb-2">
-                    <div class="flex items-center space-x-2">
-                        <span class="font-extrabold text-slate-900 text-sm">JOB #${indexNumber}</span>
-                        <span class="text-xs px-2 py-0.5 rounded font-bold ${colorClass}">${company.name}</span>
-                        <span class="text-xs px-2 py-0.5 rounded font-semibold bg-slate-100 text-slate-600">${job.nightWork ? 'NIGHT' : 'DAY'}</span>
-                    </div>
-                    <div class="flex items-center space-x-1">
-                        <span class="text-xs font-bold px-2 py-0.5 rounded-full ${job.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${job.status}</span>
-                        <button onclick="editJob('${job.id}')" class="p-1 hover:bg-slate-100 text-slate-500 rounded text-xs"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="duplicateJob('${job.id}')" title="Duplicate Job" class="p-1 hover:bg-slate-100 text-slate-500 rounded text-xs"><i class="fa-regular fa-copy"></i></button>
-                        <button onclick="deleteJob('${job.id}')" class="p-1 hover:bg-rose-50 text-rose-600 rounded text-xs"><i class="fa-solid fa-trash"></i></button>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="text-base font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-location-dot text-rose-500"></i> ${job.address}
-                        <a href="https://maps.google.com/?q=${encodeURIComponent(job.address)}" target="_blank" class="text-xs text-sky-600 hover:underline font-normal"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Maps</a>
-                    </div>
-                </div>
-
-                ${job.workNotes ? `<div class="text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100"><strong>Notes:</strong> ${job.workNotes}</div>` : ''}
-                ${job.internalNotes ? `<div class="text-xs text-amber-900 bg-amber-50/50 p-2 rounded border border-amber-200"><strong>Internal Notes (Private):</strong> ${job.internalNotes}</div>` : ''}
-
-                <div>
-                    <h5 class="text-xs font-bold uppercase text-slate-500 mb-1">Workers Assigned (${assignedWorkerObjs.length})</h5>
-                    <ul class="grid grid-cols-1 md:grid-cols-2 gap-1">${workersListHtml || '<li class="text-xs text-slate-400 italic">No workers assigned</li>'}</ul>
-                </div>
-
-                <div class="flex flex-wrap items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                    <button onclick="continueJobTomorrow('${job.id}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-2.5 py-1 rounded flex items-center gap-1 border border-indigo-200">
-                        <i class="fa-solid fa-forward"></i> Continues Tomorrow
-                    </button>
-                    ${job.parentJobId ? `<span class="text-[10px] text-slate-400"><i class="fa-solid fa-link"></i> Continued from Previous Job</span>` : ''}
-                </div>
-            `;
-
-            return card;
-        }
-
-        // --- JOB MODAL & LOGIC ---
-        function openJobModal(jobToEdit = null) {
-            populateCompanyDropdowns();
-            document.getElementById('jobModal').classList.remove('hidden');
-            document.getElementById('jobForm').reset();
-            document.getElementById('conflictWarning').classList.add('hidden');
-
-            if (jobToEdit) {
-                document.getElementById('jobModalTitle').innerText = "Edit Job";
-                document.getElementById('jobId').value = jobToEdit.id;
-                document.getElementById('jobDate').value = jobToEdit.date;
-                document.getElementById('jobCompanyId').value = jobToEdit.companyId;
-                document.getElementById('jobAddress').value = jobToEdit.address;
-                document.getElementById('jobWorkNotes').value = jobToEdit.workNotes || '';
-                document.getElementById('jobInternalNotes').value = jobToEdit.internalNotes || '';
-                document.getElementById('jobNightWork').checked = jobToEdit.nightWork;
-                document.getElementById('jobStatus').value = jobToEdit.status;
-            } else {
-                document.getElementById('jobModalTitle').innerText = "Add New Restoration Job";
-                document.getElementById('jobId').value = '';
-                document.getElementById('jobDate').value = selectedDateStr;
-                document.getElementById('jobNightWork').checked = false;
-            }
-
-            renderWorkerSelectionLists(jobToEdit);
-        }
-
-        function closeJobModal() {
-            document.getElementById('jobModal').classList.add('hidden');
-        }
-
-        function renderWorkerSelectionLists(currentJob = null) {
-            const isNight = document.getElementById('jobNightWork').checked;
-            document.getElementById('shiftLabel').innerText = isNight ? 'NIGHT SHIFT' : 'DAY SHIFT';
-
-            const jobDate = document.getElementById('jobDate').value || selectedDateStr;
-            const currentJobId = document.getElementById('jobId').value;
-
-            // Find all jobs on the same date and same shift (excluding current job)
-            const sameShiftJobs = dbJobs.filter(j => j.date === jobDate && j.nightWork === isNight && j.id !== currentJobId);
-            const assignedWorkerIdsOnShift = sameShiftJobs.flatMap(j => j.workers || []);
-
-            const availableContainer = document.getElementById('availableWorkersList');
-            const unavailableContainer = document.getElementById('unavailableWorkersList');
-
-            availableContainer.innerHTML = '';
-            unavailableContainer.innerHTML = '';
-
-            // Ensure Alphabetical Order
-            const sortedWorkers = sortAlphabetically([...dbWorkers], 'name');
-
-            sortedWorkers.filter(w => w.active).forEach(worker => {
-                const isAssignedToThisJob = currentJob && currentJob.workers && currentJob.workers.includes(worker.id);
-                const isDriverOnThisJob = currentJob && currentJob.drivers && currentJob.drivers.includes(worker.id);
-                const isConflicted = assignedWorkerIdsOnShift.includes(worker.id);
-
-                const item = document.createElement('div');
-                item.className = "flex items-center justify-between text-xs py-1 px-1.5 hover:bg-white rounded";
-
-                const isChecked = isAssignedToThisJob ? 'checked' : '';
-                const isDriverChecked = isDriverOnThisJob ? 'checked' : '';
-
-                item.innerHTML = `
-                    <label class="inline-flex items-center space-x-2 cursor-pointer">
-                        <input type="checkbox" name="assignedWorkers" value="${worker.id}" ${isChecked} onchange="checkWorkerConflicts()" class="rounded text-sky-600 focus:ring-sky-500">
-                        <span class="${isConflicted ? 'text-amber-800 font-semibold' : 'text-slate-700'}">${worker.name}</span>
-                    </label>
-                    ${worker.canBeDriver === 'YES' ? `
-                        <label class="inline-flex items-center text-[10px] text-amber-800">
-                            <input type="checkbox" name="driverWorkers" value="${worker.id}" ${isDriverChecked} class="rounded text-amber-600 focus:ring-amber-500 me-1"> DRIVER
-                        </label>
-                    ` : ''}
-                `;
-
-                if (isConflicted && !isAssignedToThisJob) {
-                    unavailableContainer.appendChild(item);
-                } else {
-                    availableContainer.appendChild(item);
-                }
-            });
-        }
-
-        function checkWorkerConflicts() {
-            const isNight = document.getElementById('jobNightWork').checked;
-            const jobDate = document.getElementById('jobDate').value || selectedDateStr;
-            const currentJobId = document.getElementById('jobId').value;
-
-            const selectedWorkerBoxes = document.querySelectorAll('input[name="assignedWorkers"]:checked');
-            const selectedWorkerIds = Array.from(selectedWorkerBoxes).map(b => b.value);
-
-            const sameShiftJobs = dbJobs.filter(j => j.date === jobDate && j.nightWork === isNight && j.id !== currentJobId);
-            const assignedWorkerIdsOnShift = sameShiftJobs.flatMap(j => j.workers || []);
-
-            const conflicts = selectedWorkerIds.filter(id => assignedWorkerIdsOnShift.includes(id));
-
-            const conflictWarning = document.getElementById('conflictWarning');
-            if (conflicts.length > 0) {
-                const conflictedNames = conflicts.map(id => (dbWorkers.find(w => w.id === id) || {}).name).join(', ');
-                document.getElementById('conflictMessage').innerText = `WARNING: ${conflictedNames} is already assigned to another ${isNight ? 'NIGHT' : 'DAY'} job today.`;
-                conflictWarning.classList.remove('hidden');
-            } else {
-                conflictWarning.classList.add('hidden');
-            }
-        }
-
-        function handleJobSubmit(e) {
-            e.preventDefault();
-
-            const jobId = document.getElementById('jobId').value;
-            const jobDate = document.getElementById('jobDate').value;
-            const companyId = document.getElementById('jobCompanyId').value;
-            const address = document.getElementById('jobAddress').value.trim();
-            const workNotes = document.getElementById('jobWorkNotes').value.trim();
-            const internalNotes = document.getElementById('jobInternalNotes').value.trim();
-            const nightWork = document.getElementById('jobNightWork').checked;
-            const status = document.getElementById('jobStatus').value;
-
-            const assignedWorkers = Array.from(document.querySelectorAll('input[name="assignedWorkers"]:checked')).map(b => b.value);
-            const drivers = Array.from(document.querySelectorAll('input[name="driverWorkers"]:checked')).map(b => b.value);
-
-            // Duplicate Address Check
-            const existingSimilar = dbJobs.find(j => j.date === jobDate && j.nightWork === nightWork && j.address.toLowerCase() === address.toLowerCase() && j.id !== jobId);
-            if (existingSimilar) {
-                if (!confirm("A job with the exact same address and shift already exists on this date. Do you want to proceed?")) {
-                    return;
-                }
-            }
-
-            if (jobId) {
-                // Update Existing
-                const index = dbJobs.findIndex(j => j.id === jobId);
-                if (index !== -1) {
-                    dbJobs[index] = { ...dbJobs[index], companyId, address, workNotes, internalNotes, nightWork, status, workers: assignedWorkers, drivers, updatedAt: new Date().toISOString() };
-                }
-            } else {
-                // Create New
-                const newJob = {
-                    id: 'job_' + Date.now(),
-                    date: jobDate,
-                    companyId,
-                    address,
-                    workNotes,
-                    internalNotes,
-                    nightWork,
-                    status,
-                    workers: assignedWorkers,
-                    drivers,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                };
-                dbJobs.push(newJob);
-            }
-
-            saveState();
-            closeJobModal();
-            renderCalendar();
-            selectDay(selectedDateStr);
-        }
-
-        function editJob(jobId) {
-            const job = dbJobs.find(j => j.id === jobId);
-            if (job) openJobModal(job);
-        }
-
-        function duplicateJob(jobId) {
-            const job = dbJobs.find(j => j.id === jobId);
-            if (!job) return;
-
-            const clonedJob = {
-                ...job,
-                id: 'job_' + Date.now(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-
-            dbJobs.push(clonedJob);
-            saveState();
-            renderCalendar();
-            selectDay(selectedDateStr);
-        }
-
-        function deleteJob(jobId) {
-            if (confirm("Are you sure you want to delete this job?")) {
-                dbJobs = dbJobs.filter(j => j.id !== jobId);
-                saveState();
-                renderCalendar();
-                selectDay(selectedDateStr);
-            }
-        }
-
-        function continueJobTomorrow(jobId) {
-            const originalJob = dbJobs.find(j => j.id === jobId);
-            if (!originalJob) return;
-
-            // Calculate Tomorrow
-            const dateParts = originalJob.date.split('-');
-            const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            dateObj.setDate(dateObj.getDate() + 1);
-
-            const nextDateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-
-            // Update original status
-            originalJob.status = "CONTINUES TOMORROW";
-
-            // Create Continuation Job
-            const continuationJob = {
-                id: 'job_' + Date.now(),
-                date: nextDateStr,
-                companyId: originalJob.companyId,
-                address: originalJob.address,
-                workNotes: originalJob.workNotes,
-                internalNotes: originalJob.internalNotes,
-                nightWork: originalJob.nightWork,
-                status: 'PENDING',
-                workers: [...originalJob.workers],
-                drivers: [...originalJob.drivers],
-                parentJobId: originalJob.id,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-
-            dbJobs.push(continuationJob);
-            saveState();
-            renderCalendar();
-            selectDay(selectedDateStr);
-            alert(`Job continuation automatically created for ${nextDateStr}!`);
-        }
-
-        function copyDayJobs() {
-            const targetDateStr = prompt("Enter target date to copy all jobs to (YYYY-MM-DD):", selectedDateStr);
-            if (!targetDateStr) return;
-
-            const sourceJobs = dbJobs.filter(j => j.date === selectedDateStr);
-            if (sourceJobs.length === 0) {
-                alert("No jobs to copy from the selected date.");
-                return;
-            }
-
-            sourceJobs.forEach(job => {
-                const copiedJob = {
-                    ...job,
-                    id: 'job_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                    date: targetDateStr,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                };
-                dbJobs.push(copiedJob);
-            });
-
-            saveState();
-            renderCalendar();
-            alert(`Copied ${sourceJobs.length} jobs to ${targetDateStr}!`);
-        }
-
-        // --- WORKERS MANAGEMENT ---
-        function renderWorkersTable() {
-            const tbody = document.getElementById('workersTableBody');
-            tbody.innerHTML = '';
-
-            sortAlphabetically(dbWorkers, 'name').forEach(worker => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition";
-                tr.innerHTML = `
-                    <td class="px-6 py-4 font-bold text-slate-800">${worker.name}</td>
-                    <td class="px-6 py-4"><span class="px-2 py-0.5 rounded text-xs font-bold ${worker.canBeDriver === 'YES' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}">${worker.canBeDriver}</span></td>
-                    <td class="px-6 py-4"><span class="px-2 py-0.5 rounded text-xs font-bold ${worker.active ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'}">${worker.active ? 'Active' : 'Inactive'}</span></td>
-                    <td class="px-6 py-4 text-right space-x-2">
-                        <button onclick="editWorker('${worker.id}')" class="text-sky-600 hover:underline text-xs font-semibold">Edit</button>
-                        <button onclick="toggleWorkerActive('${worker.id}')" class="text-slate-500 hover:underline text-xs">${worker.active ? 'Deactivate' : 'Activate'}</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function openWorkerModal(worker = null) {
-            document.getElementById('workerModal').classList.remove('hidden');
-            if (worker) {
-                document.getElementById('workerModalTitle').innerText = "Edit Worker";
-                document.getElementById('workerId').value = worker.id;
-                document.getElementById('workerName').value = worker.name;
-                document.getElementById('workerCanBeDriver').value = worker.canBeDriver;
-                document.getElementById('workerActive').value = worker.active.toString();
-            } else {
-                document.getElementById('workerModalTitle').innerText = "Add Worker";
-                document.getElementById('workerForm').reset();
-                document.getElementById('workerId').value = '';
-            }
-        }
-
-        function closeWorkerModal() {
-            document.getElementById('workerModal').classList.add('hidden');
-        }
-
-        function handleWorkerSubmit(e) {
-            e.preventDefault();
-            const id = document.getElementById('workerId').value;
-            const name = document.getElementById('workerName').value.trim();
-            const canBeDriver = document.getElementById('workerCanBeDriver').value;
-            const active = document.getElementById('workerActive').value === 'true';
-
-            if (id) {
-                const idx = dbWorkers.findIndex(w => w.id === id);
-                if (idx !== -1) dbWorkers[idx] = { ...dbWorkers[idx], name, canBeDriver, active };
-            } else {
-                dbWorkers.push({ id: 'w_' + Date.now(), name, canBeDriver, active });
-            }
-
-            saveState();
-            closeWorkerModal();
-            renderWorkersTable();
-        }
-
-        function editWorker(id) {
-            const w = dbWorkers.find(x => x.id === id);
-            if (w) openWorkerModal(w);
-        }
-
-        function toggleWorkerActive(id) {
-            const w = dbWorkers.find(x => x.id === id);
-            if (w) {
-                w.active = !w.active;
-                saveState();
-                renderWorkersTable();
-            }
-        }
-
-        // --- COMPANIES MANAGEMENT ---
-        function renderCompaniesGrid() {
-            const grid = document.getElementById('companiesGrid');
-            grid.innerHTML = '';
-
-            dbCompanies.forEach(company => {
-                const colorClass = COLOR_MAP[company.color] || COLOR_MAP['Light Gray'];
-                const card = document.createElement('div');
-                card.className = `p-5 rounded-xl border border-slate-200 shadow-sm bg-white space-y-3 relative`;
-                card.innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-bold px-2.5 py-1 rounded border ${colorClass}">${company.name}</span>
-                        <span class="text-xs ${company.active ? 'text-emerald-600 font-bold' : 'text-slate-400'}">${company.active ? 'Active' : 'Inactive'}</span>
-                    </div>
-                    <p class="text-xs text-slate-500">Color Palette: <strong>${company.color}</strong></p>
-                    <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-                        <button onclick="editCompany('${company.id}')" class="text-xs text-sky-600 hover:underline font-semibold">Edit</button>
-                    </div>
-                `;
-                grid.appendChild(card);
-            });
-        }
-
-        function populateCompanyDropdowns() {
-            const selects = [document.getElementById('filterCompany'), document.getElementById('jobCompanyId'), document.getElementById('historyFilterCompany')];
-            selects.forEach(sel => {
-                if (!sel) return;
-                const currentValue = sel.value;
-                sel.innerHTML = sel.id.includes('filter') || sel.id.includes('history') ? '<option value="ALL">All Companies</option>' : '';
-                
-                dbCompanies.filter(c => c.active || c.id === currentValue).forEach(c => {
-                    sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
-                });
-                sel.value = currentValue;
-            });
-        }
-
-        function openCompanyModal(company = null) {
-            document.getElementById('companyModal').classList.remove('hidden');
-            if (company) {
-                document.getElementById('companyModalTitle').innerText = "Edit Company";
-                document.getElementById('companyId').value = company.id;
-                document.getElementById('companyName').value = company.name;
-                document.getElementById('companyColor').value = company.color;
-                document.getElementById('companyActive').value = company.active.toString();
-            } else {
-                document.getElementById('companyModalTitle').innerText = "Add Company";
-                document.getElementById('companyForm').reset();
-                document.getElementById('companyId').value = '';
-            }
-        }
-
-        function closeCompanyModal() {
-            document.getElementById('companyModal').classList.add('hidden');
-        }
-
-        function handleCompanySubmit(e) {
-            e.preventDefault();
-            const id = document.getElementById('companyId').value;
-            const name = document.getElementById('companyName').value.trim();
-            const color = document.getElementById('companyColor').value;
-            const active = document.getElementById('companyActive').value === 'true';
-
-            if (id) {
-                const idx = dbCompanies.findIndex(c => c.id === id);
-                if (idx !== -1) dbCompanies[idx] = { ...dbCompanies[idx], name, color, active };
-            } else {
-                dbCompanies.push({ id: 'c_' + Date.now(), name, color, active });
-            }
-
-            saveState();
-            closeCompanyModal();
-            renderCompaniesGrid();
-            populateCompanyDropdowns();
-            renderCalendar();
-        }
-
-        function editCompany(id) {
-            const c = dbCompanies.find(x => x.id === id);
-            if (c) openCompanyModal(c);
-        }
-
-        // --- JOB HISTORY LOGIC ---
-        function renderHistoryTable() {
-            const tbody = document.getElementById('historyTableBody');
-            tbody.innerHTML = '';
-
-            const query = document.getElementById('searchQuery').value.toLowerCase();
-            const compFilter = document.getElementById('historyFilterCompany').value;
-            const workerFilter = document.getElementById('historyFilterWorker').value;
-            const statusFilter = document.getElementById('historyFilterStatus').value;
-
-            // Populate worker history dropdown once
-            const wSelect = document.getElementById('historyFilterWorker');
-            if (wSelect.options.length <= 1) {
-                sortAlphabetically(dbWorkers, 'name').forEach(w => {
-                    wSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`;
-                });
-            }
-
-            let filtered = dbJobs.filter(j => {
-                const comp = dbCompanies.find(c => c.id === j.companyId) || { name: '' };
-                const matchesQuery = j.address.toLowerCase().includes(query) || (j.workNotes && j.workNotes.toLowerCase().includes(query)) || comp.name.toLowerCase().includes(query);
-                const matchesComp = compFilter === 'ALL' || j.companyId === compFilter;
-                const matchesWorker = workerFilter === 'ALL' || (j.workers && j.workers.includes(workerFilter));
-                const matchesStatus = statusFilter === 'ALL' || j.status === statusFilter;
-
-                return matchesQuery && matchesComp && matchesWorker && matchesStatus;
-            });
-
-            filtered.sort((a, b) => b.date.localeCompare(a.date));
-
-            filtered.forEach(job => {
-                const comp = dbCompanies.find(c => c.id === job.companyId) || { name: 'UNKNOWN' };
-                const workerNames = (job.workers || []).map(wId => (dbWorkers.find(w => w.id === wId) || {}).name).filter(Boolean).sort().join(', ');
-
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50 transition";
-                tr.innerHTML = `
-                    <td class="px-4 py-3 font-semibold text-slate-800">${job.date}</td>
-                    <td class="px-4 py-3 font-medium">${job.nightWork ? 'NIGHT' : 'DAY'}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">${comp.name}</span></td>
-                    <td class="px-6 py-3 font-medium text-slate-800">${job.address}</td>
-                    <td class="px-4 py-3 text-xs text-slate-600 truncate max-w-xs">${workerNames || 'None'}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs font-bold ${job.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${job.status}</span></td>
-                    <td class="px-4 py-3 text-right">
-                        <button onclick="editJob('${job.id}')" class="text-sky-600 hover:underline text-xs font-semibold">View/Edit</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // --- PDF GENERATION & CLEAN PRINTING ---
-        function buildPDFContent() {
-            const dateParts = selectedDateStr.split('-');
-            const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            const formattedDate = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-            document.getElementById('pdfDateHeader').innerText = formattedDate;
-
-            const dailyNotes = dbDailyNotes[selectedDateStr];
-            const pdfDailyNotesSection = document.getElementById('pdfDailyNotesSection');
-            if (dailyNotes && dailyNotes.trim()) {
-                pdfDailyNotesSection.classList.remove('hidden');
-                document.getElementById('pdfDailyNotesText').innerText = dailyNotes;
-            } else {
-                pdfDailyNotesSection.classList.add('hidden');
-            }
-
-            const dayJobs = dbJobs.filter(j => j.date === selectedDateStr);
-            const pdfJobsList = document.getElementById('pdfJobsList');
-            pdfJobsList.innerHTML = '';
-
-            if (dayJobs.length === 0) {
-                pdfJobsList.innerHTML = `<p class="text-center text-slate-500 italic py-8">No work scheduled for this date.</p>`;
-                return;
-            }
-
-            dayJobs.forEach((job, idx) => {
-                const comp = dbCompanies.find(c => c.id === job.companyId) || { name: 'UNKNOWN' };
-                
-                // Alphabetical Workers List
-                const assignedWorkerObjs = (job.workers || [])
-                    .map(wId => dbWorkers.find(w => w.id === wId))
-                    .filter(Boolean);
-                sortAlphabetically(assignedWorkerObjs, 'name');
-
-                const workersListHtml = assignedWorkerObjs.map(w => {
-                    const isDriver = (job.drivers || []).includes(w.id);
-                    return `<li class="text-sm text-slate-800 font-medium">- ${w.name}${isDriver ? ' — DRIVER' : ''}</li>`;
-                }).join('');
-
-                const jobBlock = document.createElement('div');
-                jobBlock.className = "border border-slate-300 rounded p-4 space-y-2 bg-white";
-                jobBlock.innerHTML = `
-                    <div class="border-b border-slate-200 pb-1 flex justify-between font-bold text-md text-slate-900">
-                        <span>JOB #${idx + 1} — ${job.nightWork ? 'NIGHT' : 'DAY'}</span>
-                        <span class="text-xs uppercase bg-slate-100 px-2 py-0.5 rounded border border-slate-200">STATUS: ${job.status}</span>
-                    </div>
-
-                    <div class="space-y-1">
-                        <p class="text-xs font-bold text-slate-500 uppercase">ADDRESS:</p>
-                        <p class="text-md font-bold text-slate-900">${job.address}</p>
-                    </div>
-
-                    <div class="space-y-1">
-                        <p class="text-xs font-bold text-slate-500 uppercase">COMPANY:</p>
-                        <p class="text-sm font-bold text-sky-800">${comp.name}</p>
-                    </div>
-
-                    ${job.workNotes ? `
-                        <div class="space-y-1">
-                            <p class="text-xs font-bold text-slate-500 uppercase">NOTES:</p>
-                            <p class="text-sm text-slate-800">${job.workNotes}</p>
-                        </div>
-                    ` : ''}
-
-                    <div class="space-y-1 pt-1">
-                        <p class="text-xs font-bold text-slate-500 uppercase">WORKERS:</p>
-                        <ul class="space-y-0.5">${workersListHtml || '<li class="text-xs text-slate-400 italic">No workers assigned</li>'}</ul>
-                    </div>
-                `;
-
-                pdfJobsList.appendChild(jobBlock);
-            });
-        }
-
-        function generateDailyPDF() {
-            buildPDFContent();
-            const element = document.getElementById('pdfPrintArea');
+        function exportToPDF() {
+            const printHeader = document.getElementById("print-header");
+            printHeader.classList.remove("hidden");
+
+            const element = document.getElementById("printable-area");
             const opt = {
                 margin:       0.5,
-                filename:     `LP_Restoration_Schedule_${selectedDateStr}.pdf`,
+                filename:     `LP_Restoration_${selectedDateStr}.pdf`,
                 image:        { type: 'jpeg', quality: 0.98 },
                 html2canvas:  { scale: 2 },
                 jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
             };
 
-            html2pdf().set(opt).from(element).save();
+            html2pdf().set(opt).from(element).save().then(() => {
+                printHeader.classList.add("hidden");
+            });
         }
 
-        function printDailyPDF() {
-            buildPDFContent();
-            window.print();
+        // Helper Utility Functions
+        function formatDate(d) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function formatDateDisplay(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            const dateObj = new Date(y, m - 1, d);
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            return dateObj.toLocaleDateString('es-ES', options);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
     </script>
-
-<script type="module">
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBWZfj2LuK8mP0WDWJeZJc0lEfLIz0vfkA",
-  authDomain: "lp-restoration.firebaseapp.com",
-  projectId: "lp-restoration",
-  storageBucket: "lp-restoration.firebasestorage.app",
-  messagingSenderId: "197685695681",
-  appId: "1:197685695681:web:97cf789a6d76b873663040",
-  measurementId: "G-S24TMGBXEH"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-</script>
 </body>
 </html>

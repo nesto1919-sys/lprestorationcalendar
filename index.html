@@ -11,165 +11,8 @@
     <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    
     <!-- SUPABASE SCRIPT & REALTIME SYNC -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-        const SUPABASE_URL = 'https://apzpzfjluoiogtcwyeoq.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_oHL4po_3DpgQ-P8Ngaaovg_qN_OQi31';
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        let state = {
-            workers: [],
-            companies: [],
-            jobs: [],
-            dailyNotes: {},
-            currentTab: 'calendar',
-            selectedDate: new Date().toISOString().slice(0, 10),
-            currentYear: new Date().getFullYear(),
-            currentMonth: new Date().getMonth()
-        };
-
-        async function sincronizarCargaInicial() {
-            console.log("🔄 Sincronizando datos desde Supabase...");
-            
-            // Cargar Trabajadores
-            const { data: dataTrabajadores, error: errTrabajadores } = await _supabase
-                .from('trabajadores')
-                .select('*');
-            
-            if (errTrabajadores) {
-                console.error("Error al cargar trabajadores:", errTrabajadores.message);
-            } else if (dataTrabajadores && dataTrabajadores.length > 0) {
-                state.workers = dataTrabajadores.map(t => ({
-                    id: t.id || ('w-' + Math.random().toString(36).substr(2, 9)),
-                    name: t.nombre || t.name,
-                    canBeDriver: t.can_be_driver || t.driver || false,
-                    active: t.active !== undefined ? t.active : true
-                })).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-            } else {
-                // Fallback inicial si la tabla está vacía
-                state.workers = [
-                    "Aaron Dzib", "Antonio Romero", "Belcy Nuñez", "Brayan Muñoz", "Camilo Rocha",
-                    "Christiam Rivas", "Daniel Torrealba", "Daniela Sira", "David Herrera", "Edgar Bastardo",
-                    "Ernesto Polanco", "Gabriela Matos", "Giovanny Duran", "Hernan Riofrio", "Isidro Muñoz",
-                    "Jair Martinez", "Jaqueline Ramirez", "Jose Hernandez", "Juan Archila", "Juan Fiorillo",
-                    "Karen Ochoa", "Maria Carreras", "Martha Gonzalez", "Rafael Herrera Morales", "Vania Arroyo", "Victor Moreno"
-                ].map(name => ({
-                    id: 'w-' + Math.random().toString(36).substr(2, 9),
-                    name: name,
-                    canBeDriver: name.includes('Antonio Romero') || name.includes('Ernesto Polanco') || name.includes('Juan Archila'),
-                    active: true
-                })).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-            }
-
-            // Cargar Compañías
-            const { data: dataComp, error: errComp } = await _supabase
-                .from('companies')
-                .select('*');
-            
-            if (!errComp && dataComp && dataComp.length > 0) {
-                state.companies = dataComp.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    color: c.color || 'bg-sky-100 text-sky-800 border-sky-300',
-                    active: c.active !== undefined ? c.active : true
-                }));
-            } else {
-                state.companies = [
-                    { id: 'comp-1', name: 'ONSIDE', color: 'bg-sky-100 text-sky-800 border-sky-300', active: true },
-                    { id: 'comp-2', name: 'ABC RESTORATION', color: 'bg-emerald-100 text-emerald-800 border-emerald-300', active: true },
-                    { id: 'comp-3', name: 'XYZ SERVICES', color: 'bg-amber-100 text-amber-800 border-amber-300', active: true }
-                ];
-            }
-
-            // Cargar Trabajos / Asignaciones
-            const { data: dataAsignaciones, error: errAsignaciones } = await _supabase
-                .from('calendario_asignaciones')
-                .select('*');
-
-            if (errAsignaciones) {
-                console.error("Error al cargar asignaciones:", errAsignaciones.message);
-            } else if (dataAsignaciones) {
-                state.jobs = dataAsignaciones.map(j => ({
-                    id: j.id || ('job-' + Math.random().toString(36).substr(2, 9)),
-                    date: j.date || j.fecha,
-                    address: j.address || j.direccion,
-                    companyId: j.company_id || j.companyId || 'comp-1',
-                    shift: j.shift || j.turno || 'DAY',
-                    notes: j.notes || j.notas || '',
-                    internalNotes: j.internal_notes || '',
-                    status: j.status || 'PENDING',
-                    workers: j.workers || []
-                }));
-            }
-
-            console.log("✅ ¡Sincronización inicial completa!", state);
-            actualizarIndicadorLive(true);
-            renderApp();
-        }
-
-        function actualizarIndicadorLive(isLive) {
-            const indicator = document.getElementById('sync-status-indicator');
-            const syncText = document.getElementById('sync-text');
-            if (indicator && syncText) {
-                if (isLive) {
-                    indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
-                    syncText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse mr-1"></span>Sincronizado (LIVE)';
-                } else {
-                    indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-amber-400";
-                    syncText.innerText = "Sincronizando...";
-                }
-            }
-        }
-
-        // Configurar Realtime Channels de Supabase para sincronización automática en vivo
-        function configurarSupabaseRealtime() {
-            _supabase
-                .channel('public:calendario_asignaciones')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'calendario_asignaciones' }, payload => {
-                    console.log('Cambio detectado en tiempo real en la nube:', payload);
-                    sincronizarCargaInicial();
-                })
-                .subscribe();
-
-            _supabase
-                .channel('public:trabajadores')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'trabajadores' }, payload => {
-                    sincronizarCargaInicial();
-                })
-                .subscribe();
-        }
-
-        async function guardarNuevoCambioSupabase(tipo, itemData) {
-            actualizarIndicadorLive(false);
-            let tabla = 'calendario_asignaciones';
-            if (tipo === 'worker') tabla = 'trabajadores';
-            if (tipo === 'company') tabla = 'companies';
-
-            const { data, error } = await _supabase
-                .from(tabla)
-                .upsert([itemData])
-                .select();
-
-            if (error) {
-                console.error("❌ Error al guardar en Supabase:", error.message);
-                // Fallback a localStorage para garantizar que nunca se pierda
-                localStorage.setItem('lp_restoration_calendar_state', JSON.stringify(state));
-                actualizarIndicadorLive(true);
-            } else {
-                console.log("✅ Sincronizado exitosamente con Supabase:", data);
-                actualizarIndicadorLive(true);
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            sincronizarCargaInicial();
-            configurarSupabaseRealtime();
-        });
-    </script>
-
     <script>
         tailwind.config = {
             theme: {
@@ -246,7 +89,7 @@
             <div class="flex items-center space-x-3">
                 <div id="sync-status-indicator" class="flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span id="sync-text">Saved (Cloud Sync)</span>
+                    <span id="sync-text">Sincronizado (Local/Cloud)</span>
                 </div>
                 <button onclick="triggerManualSave()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow transition flex items-center space-x-1">
                     <i data-lucide="save" class="w-3.5 h-3.5"></i>
@@ -621,8 +464,13 @@
         </div>
     </div>
 
-    <!-- SCRIPT DE LA APLICACIÓN -->
+    <!-- SCRIPT DE LA APLICACIÓN UNIFICADO -->
     <script>
+        const SUPABASE_URL = 'https://apzpzfjluoiogtcwyeoq.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_oHL4po_3DpgQ-P8Ngaaovg_qN_OQi31';
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         const INITIAL_WORKERS = [
             "Aaron Dzib", "Antonio Romero", "Belcy Nuñez", "Brayan Muñoz", "Camilo Rocha",
             "Christiam Rivas", "Daniel Torrealba", "Daniela Sira", "David Herrera", "Edgar Bastardo",
@@ -653,6 +501,56 @@
             currentMonth: new Date().getMonth()
         };
 
+        // Sincronización robusta con Supabase y respaldo local
+        async function sincronizarCargaInicial() {
+            console.log("🔄 Sincronizando datos...");
+            try {
+                // Cargar Trabajadores
+                const { data: dataTrabajadores, error: errTrabajadores } = await _supabase.from('trabajadores').select('*');
+                if (!errTrabajadores && dataTrabajadores && dataTrabajadores.length > 0) {
+                    state.workers = dataTrabajadores.map(t => ({
+                        id: t.id || ('w-' + Math.random().toString(36).substr(2, 9)),
+                        name: t.nombre || t.name,
+                        canBeDriver: t.can_be_driver || t.driver || false,
+                        active: t.active !== undefined ? t.active : true
+                    })).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+                }
+
+                // Cargar Compañías
+                const { data: dataComp, error: errComp } = await _supabase.from('companies').select('*');
+                if (!errComp && dataComp && dataComp.length > 0) {
+                    state.companies = dataComp.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        color: c.color || 'bg-sky-100 text-sky-800 border-sky-300',
+                        active: c.active !== undefined ? c.active : true
+                    }));
+                }
+
+                // Cargar Trabajos
+                const { data: dataAsignaciones, error: errAsignaciones } = await _supabase.from('calendario_asignaciones').select('*');
+                if (!errAsignaciones && dataAsignaciones) {
+                    state.jobs = dataAsignaciones.map(j => ({
+                        id: j.id || ('job-' + Math.random().toString(36).substr(2, 9)),
+                        date: j.date || j.fecha,
+                        address: j.address || j.direccion,
+                        companyId: j.company_id || j.companyId || 'comp-1',
+                        shift: j.shift || j.turno || 'DAY',
+                        notes: j.notes || j.notas || '',
+                        internalNotes: j.internal_notes || '',
+                        status: j.status || 'PENDING',
+                        workers: j.workers || []
+                    }));
+                }
+                actualizarIndicadorLive(true);
+            } catch (e) {
+                console.warn("Modo offline o error en Supabase, cargando desde localStorage...", e);
+                loadState();
+                actualizarIndicadorLive(false);
+            }
+            renderApp();
+        }
+
         function loadState() {
             const saved = localStorage.getItem('lp_restoration_calendar_state');
             if (saved) {
@@ -667,9 +565,11 @@
             localStorage.setItem('lp_restoration_calendar_state', JSON.stringify(state));
             const indicator = document.getElementById('sync-status-indicator');
             const syncText = document.getElementById('sync-text');
-            indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
-            syncText.innerText = "Saved (Cloud Sync)";
-            lucide.createIcons();
+            if(indicator && syncText) {
+                indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
+                syncText.innerText = "Guardado Local / Cloud";
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function triggerManualSave() {
@@ -677,18 +577,41 @@
             alert('¡Cambios guardados correctamente!');
         }
 
+        function actualizarIndicadorLive(isLive) {
+            const indicator = document.getElementById('sync-status-indicator');
+            const syncText = document.getElementById('sync-text');
+            if (indicator && syncText) {
+                if (isLive) {
+                    indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
+                    syncText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse mr-1"></span>Sincronizado (LIVE)';
+                } else {
+                    indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-amber-400";
+                    syncText.innerText = "Modo Local";
+                }
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
-            loadState();
-            renderApp();
-            lucide.createIcons();
+            sincronizarCargaInicial();
+            configurarSupabaseRealtime();
         });
+
+        function configurarSupabaseRealtime() {
+            try {
+                _supabase.channel('public:calendario_asignaciones')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'calendario_asignaciones' }, () => sincronizarCargaInicial())
+                    .subscribe();
+            } catch(e) { console.error(e); }
+        }
 
         function switchTab(tabId) {
             state.currentTab = tabId;
             ['calendar', 'day-view', 'workers', 'companies', 'history', 'settings'].forEach(t => {
-                document.getElementById(`tab-${t}`).classList.add('hidden');
+                const el = document.getElementById(`tab-${t}`);
+                if(el) el.classList.add('hidden');
             });
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+            const targetTab = document.getElementById(`tab-${tabId}`);
+            if(targetTab) targetTab.classList.remove('hidden');
             
             ['calendar', 'workers', 'companies', 'history', 'settings'].forEach(t => {
                 const btn = document.getElementById(`nav-${t}`);
@@ -702,7 +625,6 @@
             });
 
             renderApp();
-            lucide.createIcons();
         }
 
         function toggleMobileMenu() {
@@ -716,7 +638,7 @@
             if (state.currentTab === 'workers') renderWorkersTable();
             if (state.currentTab === 'companies') renderCompaniesGrid();
             if (state.currentTab === 'history') renderHistory();
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function populateCompanyDropdowns() {
@@ -763,9 +685,11 @@
 
         function renderCalendar() {
             const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-            document.getElementById('calendar-month-year').innerText = `${monthNames[state.currentMonth]} ${state.currentYear}`;
+            const monthYearEl = document.getElementById('calendar-month-year');
+            if(monthYearEl) monthYearEl.innerText = `${monthNames[state.currentMonth]} ${state.currentYear}`;
 
             const grid = document.getElementById('calendar-grid');
+            if(!grid) return;
             grid.innerHTML = '';
 
             const firstDayIndex = new Date(state.currentYear, state.currentMonth, 1).getDay();
@@ -792,7 +716,7 @@
                     jobsHtml += `
                         <div class="text-xs p-1 rounded border mb-1 truncate ${comp.color} font-medium flex items-center justify-between">
                             <span class="truncate">${comp.name} — ${job.address}</span>
-                            <span class="text-[10px] opacity-75 font-bold ml-1">${job.shift[0]}</span>
+                            <span class="text-[10px] opacity-75 font-bold ml-1">${job.shift ? job.shift[0] : 'D'}</span>
                         </div>
                     `;
                 });
@@ -807,7 +731,7 @@
                     </div>
                 `;
             }
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function openDayView(dateStr) {
@@ -832,7 +756,7 @@
 
             document.getElementById('day-works-list').innerHTML = dayJobs.map((j, idx) => renderJobCard(j, idx + 1)).join('');
             document.getElementById('night-works-list').innerHTML = nightJobs.map((j, idx) => renderJobCard(j, idx + 1)).join('');
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function saveDailyNotes(val) {
@@ -842,7 +766,7 @@
 
         function renderJobCard(job, index) {
             const comp = state.companies.find(c => c.id === job.companyId) || { name: 'ONSIDE', color: 'bg-sky-100 text-sky-800 border-sky-300' };
-            const workersHtml = job.workers.map(w => `
+            const workersHtml = (job.workers || []).map(w => `
                 <li class="flex items-center justify-between text-slate-700 py-0.5">
                     <span>• ${w.name}</span>
                     ${w.driver ? '<span class="text-xs bg-slate-900 text-white px-2 py-0.5 rounded font-bold">DRIVER</span>' : ''}
@@ -890,7 +814,7 @@
             let job = jobId ? state.jobs.find(j => j.id === jobId) : null;
 
             checklist.innerHTML = state.workers.filter(w => w.active).map(w => {
-                const assigned = job ? job.workers.find(jw => jw.name === w.name) : null;
+                const assigned = job && job.workers ? job.workers.find(jw => jw.name === w.name) : null;
                 return `
                     <div class="flex items-center justify-between bg-white p-2 rounded border border-slate-200">
                         <label class="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer">
@@ -910,7 +834,8 @@
             if(job) {
                 document.getElementById('job-address').value = job.address;
                 document.getElementById('job-company').value = job.companyId;
-                document.querySelector(`input[name="job-shift"][value="${job.shift}"]`).checked = true;
+                const shiftRadio = document.querySelector(`input[name="job-shift"][value="${job.shift}"]`);
+                if(shiftRadio) shiftRadio.checked = true;
                 document.getElementById('job-notes').value = job.notes || '';
                 document.getElementById('job-internal-notes').value = job.internalNotes || '';
                 document.getElementById('job-status').value = job.status;
@@ -920,7 +845,7 @@
                 document.getElementById('job-internal-notes').value = '';
                 document.getElementById('job-status').value = 'PENDING';
             }
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function closeJobModal() {
@@ -998,6 +923,7 @@
 
         function renderWorkersTable() {
             const tbody = document.getElementById('workers-table-body');
+            if(!tbody) return;
             tbody.innerHTML = state.workers.map(w => `
                 <tr class="hover:bg-slate-50 transition">
                     <td class="p-4 font-bold text-slate-800">${w.name}</td>
@@ -1009,7 +935,7 @@
                     </td>
                 </tr>
             `).join('');
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function openWorkerModal(workerId = null) {
@@ -1019,9 +945,11 @@
 
             if(workerId) {
                 const w = state.workers.find(item => item.id === workerId);
-                document.getElementById('worker-name-input').value = w.name;
-                document.getElementById('worker-driver-checkbox').checked = w.canBeDriver;
-                document.getElementById('worker-active-checkbox').checked = w.active;
+                if(w) {
+                    document.getElementById('worker-name-input').value = w.name;
+                    document.getElementById('worker-driver-checkbox').checked = w.canBeDriver;
+                    document.getElementById('worker-active-checkbox').checked = w.active;
+                }
             } else {
                 document.getElementById('worker-name-input').value = '';
                 document.getElementById('worker-driver-checkbox').checked = false;
@@ -1063,6 +991,7 @@
 
         function renderCompaniesGrid() {
             const grid = document.getElementById('companies-grid');
+            if(!grid) return;
             grid.innerHTML = state.companies.map(c => `
                 <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 relative overflow-hidden">
                     <div class="absolute left-0 top-0 bottom-0 w-2 ${c.color.split(' ')[0]}"></div>
@@ -1079,7 +1008,7 @@
                     </div>
                 </div>
             `).join('');
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function openCompanyModal(companyId = null) {
@@ -1089,8 +1018,10 @@
 
             if(companyId) {
                 const comp = state.companies.find(c => c.id === companyId);
-                document.getElementById('company-name-input').value = comp.name;
-                document.getElementById('company-color-input').value = comp.color;
+                if(comp) {
+                    document.getElementById('company-name-input').value = comp.name;
+                    document.getElementById('company-color-input').value = comp.color;
+                }
             } else {
                 document.getElementById('company-name-input').value = '';
             }
@@ -1120,17 +1051,18 @@
         function renderHistory() {
             const query = (document.getElementById('history-search')?.value || '').toLowerCase();
             const tbody = document.getElementById('history-table-body');
+            if(!tbody) return;
             
             let filtered = state.jobs.filter(j => {
                 const comp = state.companies.find(c => c.id === j.companyId);
                 const compName = comp ? comp.name.toLowerCase() : '';
-                const workerStr = j.workers.map(w => w.name).join(' ').toLowerCase();
+                const workerStr = (j.workers || []).map(w => w.name).join(' ').toLowerCase();
                 return j.address.toLowerCase().includes(query) || compName.includes(query) || workerStr.includes(query) || j.date.includes(query);
             });
 
             tbody.innerHTML = filtered.map(j => {
                 const comp = state.companies.find(c => c.id === j.companyId) || { name: 'ONSIDE', color: 'bg-sky-100 text-sky-800 border-sky-300' };
-                const workersList = j.workers.map(w => w.name).join(', ');
+                const workersList = (j.workers || []).map(w => w.name).join(', ');
                 return `
                     <tr class="hover:bg-slate-50 transition">
                         <td class="p-4 font-semibold text-slate-700">${j.date} <span class="text-xs text-slate-400 block">${j.shift}</span></td>
@@ -1142,7 +1074,7 @@
                     </tr>
                 `;
             }).join('');
-            lucide.createIcons();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function openCopyDayModal() { document.getElementById('copy-day-modal').classList.remove('hidden'); }
@@ -1180,9 +1112,9 @@
                     <div class="grid grid-cols-1 gap-2">
                         ${dayJobs.map((j, idx) => {
                             const comp = state.companies.find(c => c.id === j.companyId) || { name: 'ONSIDE' };
-                            const workersHtml = j.workers.map(w => `
+                            const workersHtml = (j.workers || []).map(w => `
                                 <span class="inline-block bg-slate-100 border border-slate-300 px-2 py-0.5 rounded text-[11px] font-medium mr-1 mb-1">
-                                    ${w.name} ${w.driver ? '🚗 (Driver)' : ''}
+                                    ${w.name}${w.driver ? '🚗 (Driver)' : ''}
                                 </span>
                             `).join('');
                             
@@ -1192,8 +1124,7 @@
                                         <span class="text-sm">#${idx + 1} — <span class="text-blue-700">${comp.name}</span> (${j.shift})</span>
                                         <span class="px-2 py-0.5 rounded font-bold uppercase text-[10px] ${j.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">${j.status}</span>
                                     </div>
-                                    <div class="mb-1"><strong>Dirección:</strong> <span class="font-semibold text-slate-800">${j.address}</span></div>
-                                    ${j.notes ? `<div class="mb-1 text-slate-600"><strong>Notas:</strong> ${j.notes}</div>` : ''}
+                                    <div class="mb-1"><strong>Dirección:</strong> <span class="font-semibold text-slate-800">${j.address}</span></div>${j.notes ? `<div class="mb-1 text-slate-600"><strong>Notas:</strong> ${j.notes}</div>` : ''}
                                     <div>
                                         <strong class="block mb-0.5 text-slate-500 uppercase text-[10px]">Trabajadores Asignados:</strong>
                                         <div class="flex flex-wrap">${workersHtml || '<span class="text-slate-400 italic">Sin trabajadores</span>'}</div>

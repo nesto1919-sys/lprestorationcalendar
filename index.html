@@ -18,6 +18,57 @@
         const SUPABASE_ANON_KEY = 'sb_publishable_oHL4po_3DpgQ-P8Ngaaovg_qN_OQi31';
         const { createClient } = supabase;
         const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let appState = {
+            trabajadores: [],
+            asignaciones: []
+        };
+
+        async function sincronizarCargaInicial() {
+            console.log("🔄 Sincronizando datos desde Supabase...");
+
+            const { data: dataTrabajadores, error: errTrabajadores } = await supabase
+                .from('trabajadores')
+                .select('*');
+            
+            if (errTrabajadores) {
+                console.error("Error al cargar trabajadores:", errTrabajadores.message);
+            } else {
+                appState.trabajadores = dataTrabajadores || [];
+            }
+
+            const { data: dataAsignaciones, error: errAsignaciones } = await supabase
+                .from('calendario_asignaciones')
+                .select('*');
+
+            if (errAsignaciones) {
+                console.error("Error al cargar asignaciones:", errAsignaciones.message);
+            } else {
+                appState.asignaciones = dataAsignaciones || [];
+            }
+
+            console.log("✅ ¡Sincronización completa!", appState);
+}
+
+        async function guardarNuevoCambio(nuevoTrabajo) {
+            const { data, error } = await supabase
+                .from('calendario_asignaciones')
+                .insert([nuevoTrabajo])
+                .select();
+
+            if (error) {
+                console.error("❌ Error al guardar en Supabase:", error.message);
+                alert("Hubo un error al sincronizar con la nube.");
+            } else {
+                console.log("✅ Guardado exitoso en la nube:", data);
+                sincronizarCargaInicial();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            sincronizarCargaInicial();
+        });
+
+       
     </script>
 
     <script>

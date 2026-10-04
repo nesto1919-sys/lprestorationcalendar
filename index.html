@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -86,9 +85,9 @@
 
             <!-- Sync status & manual save button -->
             <div class="flex items-center space-x-3">
-                <div id="sync-status-indicator" class="flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span id="sync-text">Modo Local (Almacenamiento Local)</span>
+                <div id="sync-status-indicator" class="flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-amber-400">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="sync-text">Conectando a Firebase...</span>
                 </div>
                 <button onclick="triggerManualSave()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow transition flex items-center space-x-1">
                     <i data-lucide="save" class="w-3.5 h-3.5"></i>
@@ -463,7 +462,35 @@
         </div>
     </div>
 
-    <!-- APPLICATION SCRIPT (LOCAL STORAGE & ROBUST) -->
+    <!-- FIREBASE AND APPLICATION SCRIPT -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyASelFScUpdZH1eLSiMzU0MXnZdH-G0Shg",
+            authDomain: "calendar-5e903.firebaseapp.com",
+            projectId: "calendar-5e903",
+            storageBucket: "calendar-5e903.firebasestorage.app",
+            messagingSenderId: "315957787511",
+            appId: "1:315957787511:web:d16b3b3ca52828fc973f72"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Make db and functions available globally
+        window.firebaseDB = db;
+        window.firebaseDoc = doc;
+        window.firebaseSetDoc = setDoc;
+        window.firebaseGetDoc = getDoc;
+
+        console.log("Firebase initialized successfully.");
+
+        // Trigger initial load from Firestore if available
+        window.dispatchEvent(new CustomEvent('firebase-ready'));
+    </script>
+
     <script>
         const INITIAL_WORKERS = [
             "Aaron Dzib", "Antonio Romero", "Belcy Nuñez", "Brayan Muñoz", "Camilo Rocha",
@@ -495,35 +522,101 @@
             currentMonth: new Date().getMonth()
         };
 
-        function loadState() {
+        async function loadStateFromFirebase() {
+            try {
+                if (window.firebaseDB && window.firebaseDoc && window.firebaseGetDoc) {
+                    const docRef = window.firebaseDoc(window.firebaseDB, "calendarData", "mainState");
+                    const docSnap = await window.firebaseGetDoc(docRef);
+                    if (docSnap.exists()) {
+                        const cloudData = docSnap.data();
+                        state = { ...state, ...cloudData };
+                        console.log("State loaded from Firebase Firestore.");
+                    } else {
+                        console.log("No cloud data found in Firestore, using defaults/localStorage.");
+                        loadLocalStorageFallback();
+                    }
+                } else {
+                    loadLocalStorageFallback();
+                }
+            } catch (e) {
+                console.error("Error loading from Firebase, falling back to localStorage", e);
+                loadLocalStorageFallback();
+            }
+            updateSyncIndicator('success', 'Sincronizado con Firebase');
+            renderApp();
+        }
+
+        function loadLocalStorageFallback() {
             const saved = localStorage.getItem('lp_restoration_calendar_state');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
                     state = { ...state, ...parsed };
-                } catch(e) { console.error('Error loading state', e); }
+                } catch(e) { console.error('Error loading localStorage', e); }
             }
         }
 
-        function saveState() {
+        async function saveState() {
+            // Also update localStorage as backup
             localStorage.setItem('lp_restoration_calendar_state', JSON.stringify(state));
-            const indicator = document.getElementById('sync-status-indicator');
-            const syncText = document.getElementById('sync-text');
-            if(indicator && syncText) {
-                indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
-                syncText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1"></span>Guardado Exitosamente';
+
+            try {
+                if (window.firebaseDB && window.firebaseDoc && window.firebaseSetDoc) {
+                    updateSyncIndicator('syncing', 'Guardando en Firebase...');
+                    const docRef = window.firebaseDoc(window.firebaseDB, "calendarData", "mainState");
+                    await window.firebaseSetDoc(docRef, {
+                        workers: state.workers,
+                        companies: state.companies,
+                        jobs: state.jobs,
+                        dailyNotes: state.dailyNotes,
+                        updatedAt: new Date().toISOString()
+                    });
+                    updateSyncIndicator('success', 'Sincronizado con Firebase');
+                } else {
+                    updateSyncIndicator('success', 'Guardado Local');
+                }
+            } catch (e) {
+                console.error("Error saving to Firebase", e);
+                updateSyncIndicator('error', 'Error al sincronizar con Firebase');
             }
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
-        function triggerManualSave() {
-            saveState();
-            alert('¡Cambios guardados correctamente en este dispositivo!');
+        function updateSyncIndicator(status, text) {
+            const indicator = document.getElementById('sync-status-indicator');
+            const syncText = document.getElementById('sync-text');
+            if(!indicator || !syncText) return;
+
+            if (status === 'success') {
+                indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
+                syncText.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1"></span>${text}`;
+            } else if (status === 'syncing') {
+                indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-amber-400";
+                syncText.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block mr-1"></span>${text}`;
+            } else {
+                indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-rose-400";
+                syncText.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400 inline-block mr-1"></span>${text}`;
+            }
         }
 
+        function triggerManualSave() {
+            saveState();
+            alert('¡Cambios guardados y sincronizados con Firebase!');
+        }
+
+        window.addEventListener('firebase-ready', () => {
+            loadStateFromFirebase();
+        });
+
         window.addEventListener('DOMContentLoaded', () => {
-            loadState();
-            renderApp();
+            // Fallback if event already fired
+            setTimeout(() => {
+                if (!window.firebaseDB) {
+                    loadLocalStorageFallback();
+                    updateSyncIndicator('success', 'Modo Local');
+                    renderApp();
+                }
+            }, 1000);
         });
 
         function switchTab(tabId) {

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -11,8 +12,6 @@
     <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- SUPABASE SCRIPT & REALTIME SYNC -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -89,7 +88,7 @@
             <div class="flex items-center space-x-3">
                 <div id="sync-status-indicator" class="flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span id="sync-text">Sincronizado (Local/Cloud)</span>
+                    <span id="sync-text">Modo Local (Almacenamiento Local)</span>
                 </div>
                 <button onclick="triggerManualSave()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow transition flex items-center space-x-1">
                     <i data-lucide="save" class="w-3.5 h-3.5"></i>
@@ -289,12 +288,12 @@
         <div id="tab-settings" class="hidden space-y-6">
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
                 <div>
-                    <h2 class="text-xl font-bold text-slate-800">Settings & Cloud Backup</h2>
-                    <p class="text-xs text-slate-500">Export your database backup</p>
+                    <h2 class="text-xl font-bold text-slate-800">Settings & Backup</h2>
+                    <p class="text-xs text-slate-500">Export or import your database backup</p>
                 </div>
                 <hr class="border-slate-200">
                 <div class="space-y-4">
-                    <h3 class="font-bold text-slate-700 text-sm">Backup Data</h3>
+                    <h3 class="font-bold text-slate-700 text-sm">Export Data</h3>
                     <p class="text-sm text-slate-600">Export all workers, companies, and jobs as a JSON backup file.</p>
                     <button onclick="exportDataJSON()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center space-x-2">
                         <i data-lucide="download" class="w-4 h-4"></i><span>Export Backup JSON</span>
@@ -464,13 +463,8 @@
         </div>
     </div>
 
-    <!-- SCRIPT DE LA APLICACIÓN UNIFICADO -->
+    <!-- APPLICATION SCRIPT (LOCAL STORAGE & ROBUST) -->
     <script>
-        const SUPABASE_URL = 'https://apzpzfjluoiogtcwyeoq.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_oHL4po_3DpgQ-P8Ngaaovg_qN_OQi31';
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
         const INITIAL_WORKERS = [
             "Aaron Dzib", "Antonio Romero", "Belcy Nuñez", "Brayan Muñoz", "Camilo Rocha",
             "Christiam Rivas", "Daniel Torrealba", "Daniela Sira", "David Herrera", "Edgar Bastardo",
@@ -501,56 +495,6 @@
             currentMonth: new Date().getMonth()
         };
 
-        // Sincronización robusta con Supabase y respaldo local
-        async function sincronizarCargaInicial() {
-            console.log("🔄 Sincronizando datos...");
-            try {
-                // Cargar Trabajadores
-                const { data: dataTrabajadores, error: errTrabajadores } = await _supabase.from('trabajadores').select('*');
-                if (!errTrabajadores && dataTrabajadores && dataTrabajadores.length > 0) {
-                    state.workers = dataTrabajadores.map(t => ({
-                        id: t.id || ('w-' + Math.random().toString(36).substr(2, 9)),
-                        name: t.nombre || t.name,
-                        canBeDriver: t.can_be_driver || t.driver || false,
-                        active: t.active !== undefined ? t.active : true
-                    })).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-                }
-
-                // Cargar Compañías
-                const { data: dataComp, error: errComp } = await _supabase.from('companies').select('*');
-                if (!errComp && dataComp && dataComp.length > 0) {
-                    state.companies = dataComp.map(c => ({
-                        id: c.id,
-                        name: c.name,
-                        color: c.color || 'bg-sky-100 text-sky-800 border-sky-300',
-                        active: c.active !== undefined ? c.active : true
-                    }));
-                }
-
-                // Cargar Trabajos
-                const { data: dataAsignaciones, error: errAsignaciones } = await _supabase.from('calendario_asignaciones').select('*');
-                if (!errAsignaciones && dataAsignaciones) {
-                    state.jobs = dataAsignaciones.map(j => ({
-                        id: j.id || ('job-' + Math.random().toString(36).substr(2, 9)),
-                        date: j.date || j.fecha,
-                        address: j.address || j.direccion,
-                        companyId: j.company_id || j.companyId || 'comp-1',
-                        shift: j.shift || j.turno || 'DAY',
-                        notes: j.notes || j.notas || '',
-                        internalNotes: j.internal_notes || '',
-                        status: j.status || 'PENDING',
-                        workers: j.workers || []
-                    }));
-                }
-                actualizarIndicadorLive(true);
-            } catch (e) {
-                console.warn("Modo offline o error en Supabase, cargando desde localStorage...", e);
-                loadState();
-                actualizarIndicadorLive(false);
-            }
-            renderApp();
-        }
-
         function loadState() {
             const saved = localStorage.getItem('lp_restoration_calendar_state');
             if (saved) {
@@ -567,42 +511,20 @@
             const syncText = document.getElementById('sync-text');
             if(indicator && syncText) {
                 indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
-                syncText.innerText = "Guardado Local / Cloud";
+                syncText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block mr-1"></span>Guardado Exitosamente';
             }
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function triggerManualSave() {
             saveState();
-            alert('¡Cambios guardados correctamente!');
-        }
-
-        function actualizarIndicadorLive(isLive) {
-            const indicator = document.getElementById('sync-status-indicator');
-            const syncText = document.getElementById('sync-text');
-            if (indicator && syncText) {
-                if (isLive) {
-                    indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-emerald-400";
-                    syncText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse mr-1"></span>Sincronizado (LIVE)';
-                } else {
-                    indicator.className = "flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-full text-xs font-medium text-amber-400";
-                    syncText.innerText = "Modo Local";
-                }
-            }
+            alert('¡Cambios guardados correctamente en este dispositivo!');
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            sincronizarCargaInicial();
-            configurarSupabaseRealtime();
+            loadState();
+            renderApp();
         });
-
-        function configurarSupabaseRealtime() {
-            try {
-                _supabase.channel('public:calendario_asignaciones')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'calendario_asignaciones' }, () => sincronizarCargaInicial())
-                    .subscribe();
-            } catch(e) { console.error(e); }
-        }
 
         function switchTab(tabId) {
             state.currentTab = tabId;

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=1280">
     <title>LP RESTORATION CALENDAR</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -49,7 +49,7 @@
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col" style="min-width: 1280px;" x-data>
 
     <!-- Top Navigation Header -->
     <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md">
@@ -368,6 +368,7 @@
                         <option value="IN PROGRESS">IN PROGRESS</option>
                         <option value="COMPLETED">COMPLETED</option>
                         <option value="CONTINUES TOMORROW">CONTINUES TOMORROW</option>
+                        <option value="CANCELLED">CANCELLED (CANCELADO)</option>
                     </select>
                 </div>
                 <div class="space-y-2">
@@ -725,24 +726,17 @@
                     dayJobs = dayJobs.filter(j => j.companyId === companyFilter);
                 }
 
-                let jobsHtml = '';
-                dayJobs.forEach(job => {
-                    const comp = state.companies.find(c => c.id === job.companyId) || { name: 'COMPANY', color: 'bg-slate-100 text-slate-800 border-slate-300' };
-                    jobsHtml += `
-                        <div class="text-xs p-1 rounded border mb-1 truncate ${comp.color} font-medium flex items-center justify-between">
-                            <span class="truncate">${comp.name} — ${job.address}</span>
-                            <span class="text-[10px] opacity-75 font-bold ml-1">${job.shift ? job.shift[0] : 'D'}</span>
-                        </div>
-                    `;
-                });
+                const hasJobs = dayJobs.length > 0;
+                const indicatorHtml = hasJobs
+                    ? `<div class="mt-auto py-1.5 px-2 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg text-center flex items-center justify-center space-x-1.5 shadow-sm"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span><span>${dayJobs.length} Trabajos</span></div>`
+                    : `<div class="mt-auto py-1.5 px-2 bg-rose-100 text-rose-800 text-xs font-semibold rounded-lg text-center flex items-center justify-center space-x-1.5 shadow-sm"><span class="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block"></span><span>Sin trabajos</span></div>`;
 
                 grid.innerHTML += `
-                    <div onclick="openDayView('${dateKey}')" class="bg-white min-h-[110px] p-2 hover:bg-blue-50/50 cursor-pointer transition flex flex-col justify-between border border-slate-100">
+                    <div onclick="openDayView('${dateKey}')" class="bg-white min-h-[110px] p-2.5 hover:bg-blue-50/50 cursor-pointer transition flex flex-col justify-between border border-slate-100">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-700">${day}</span>
-                            ${dayJobs.length > 0 ? `<span class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded-full font-bold">${dayJobs.length}</span>` : ''}
                         </div>
-                        <div class="space-y-1 mt-1 overflow-hidden">${jobsHtml}</div>
+                        ${indicatorHtml}
                     </div>
                 `;
             }
@@ -769,8 +763,8 @@
             document.getElementById('day-works-count').innerText = `${dayJobs.length} jobs`;
             document.getElementById('night-works-count').innerText = `${nightJobs.length} jobs`;
 
-            document.getElementById('day-works-list').innerHTML = dayJobs.map((j, idx) => renderJobCard(j, idx + 1)).join('');
-            document.getElementById('night-works-list').innerHTML = nightJobs.map((j, idx) => renderJobCard(j, idx + 1)).join('');
+            document.getElementById('day-works-list').innerHTML = dayJobs.map((j, idx) => renderJobCard(j, idx + 1, dayJobs.length)).join('');
+            document.getElementById('night-works-list').innerHTML = nightJobs.map((j, idx) => renderJobCard(j, idx + 1, nightJobs.length)).join('');
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
@@ -779,7 +773,7 @@
             saveState();
         }
 
-        function renderJobCard(job, index) {
+        function renderJobCard(job, index, totalJobs) {
             const comp = state.companies.find(c => c.id === job.companyId) || { name: 'ONSIDE', color: 'bg-sky-100 text-sky-800 border-sky-300' };
             const workersHtml = (job.workers || []).map(w => `
                 <li class="flex items-center justify-between text-slate-700 py-0.5">
@@ -788,32 +782,41 @@
                 </li>
             `).join('');
 
+            const isCancelled = job.status === 'CANCELLED';
+            const cardBg = isCancelled ? 'bg-rose-50 border-rose-300' : 'bg-white';
+            const leftBarColor = isCancelled ? 'bg-rose-500' : comp.color.split(' ')[0];
+
             return `
-                <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3 relative overflow-hidden">
-                    <div class="absolute left-0 top-0 bottom-0 w-1.5 ${comp.color.split(' ')[0]}"></div>
+                <div class="${cardBg} rounded-xl border ${isCancelled ? 'border-rose-300 ring-2 ring-rose-200' : 'border-slate-200'} shadow-sm p-4 space-y-3 relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1.5 ${leftBarColor}"></div>
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-2">
-                            <span class="font-black text-slate-800">JOB #${index}</span>
+                            <span class="font-black ${isCancelled ? 'text-rose-900 line-through' : 'text-slate-800'}">JOB #${index}</span>
                             <span class="text-xs px-2.5 py-0.5 rounded-full font-bold ${comp.color}">${comp.name}</span>
+                            ${isCancelled ? '<span class="bg-rose-600 text-white text-[10px] px-2 py-0.5 rounded font-extrabold uppercase">CANCELLED</span>' : ''}
                         </div>
                         <div class="flex items-center space-x-1">
+                            <!-- Botones para reordenar -->
+                            <button onclick="moveJobOrder('${job.id}', 'up')" title="Mover arriba" class="p-1 text-slate-400 hover:text-slate-700 bg-slate-100 rounded"><i data-lucide="chevron-up" class="w-3.5 h-3.5"></i></button>
+                            <button onclick="moveJobOrder('${job.id}', 'down')" title="Mover abajo" class="p-1 text-slate-400 hover:text-slate-700 bg-slate-100 rounded"><i data-lucide="chevron-down" class="w-3.5 h-3.5"></i></button>
+                            <div class="h-4 w-px bg-slate-200 mx-1"></div>
                             <button onclick="editJob('${job.id}')" class="p-1 text-slate-400 hover:text-blue-600"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
                             <button onclick="duplicateJob('${job.id}')" class="p-1 text-slate-400 hover:text-emerald-600"><i data-lucide="copy" class="w-4 h-4"></i></button>
                             <button onclick="deleteJob('${job.id}')" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
                     </div>
                     <div>
-                        <a href="https://maps.google.com/?q=${encodeURIComponent(job.address)}" target="_blank" class="text-blue-600 hover:underline font-bold text-base flex items-center space-x-1">
+                        <a href="https://maps.google.com/?q=${encodeURIComponent(job.address)}" target="_blank" class="${isCancelled ? 'text-rose-700 line-through' : 'text-blue-600'} hover:underline font-bold text-base flex items-center space-x-1">
                             <i data-lucide="map-pin" class="w-4 h-4"></i><span>${job.address}</span>
                         </a>
                     </div>
-                    ${job.notes ? `<div class="bg-slate-50 p-2.5 rounded-lg text-sm text-slate-700"><strong class="text-xs uppercase text-slate-500 block mb-1">Work Notes:</strong>${job.notes}</div>` : ''}
+                    ${job.notes ? `<div class="${isCancelled ? 'bg-rose-100/60 text-rose-900' : 'bg-slate-50 text-slate-700'} p-2.5 rounded-lg text-sm"><strong class="text-xs uppercase opacity-75 block mb-1">Work Notes:</strong>${job.notes}</div>` : ''}
                     <div>
                         <strong class="text-xs uppercase text-slate-500 block mb-1">Workers Assigned:</strong>
-                        <ul class="text-sm bg-slate-50 p-2.5 rounded-lg space-y-1">${workersHtml || '<li class="text-slate-400 italic">No workers assigned</li>'}</ul>
+                        <ul class="text-sm ${isCancelled ? 'bg-rose-100/50' : 'bg-slate-50'} p-2.5 rounded-lg space-y-1">${workersHtml || '<li class="text-slate-400 italic">No workers assigned</li>'}</ul>
                     </div>
-                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                        <span class="font-bold px-2.5 py-1 rounded-full ${job.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : job.status === 'IN PROGRESS' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800'}">${job.status}</span>
+                    <div class="flex items-center justify-between pt-2 border-t ${isCancelled ? 'border-rose-200' : 'border-slate-100'} text-xs">
+                        <span class="font-bold px-2.5 py-1 rounded-full ${isCancelled ? 'bg-rose-600 text-white' : job.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : job.status === 'IN PROGRESS' ? 'bg-blue-100 text-blue-800' : job.status === 'CONTINUES TOMORROW' ? 'bg-purple-100 text-purple-800' : 'bg-amber-100 text-amber-800'}">${job.status}</span>
                         <span class="text-slate-400">Shift: ${job.shift}</span>
                     </div>
                 </div>
@@ -922,6 +925,30 @@
                     workers
                 };
                 state.jobs.push(newJob);
+            }
+
+            // Si el estado es "CONTINUES TOMORROW", creamos automáticamente una copia para el día siguiente
+            if (status === 'CONTINUES TOMORROW') {
+                const currentDateObj = new Date(state.selectedDate + 'T00:00:00');
+                currentDateObj.setDate(currentDateObj.getDate() + 1);
+                const nextDateStr = currentDateObj.toISOString().slice(0, 10);
+                
+                // Verificamos si ya existe exactamente el mismo trabajo el día siguiente para no duplicar infinitamente
+                const existsTomorrow = state.jobs.some(j => j.date === nextDateStr && j.address === address && j.shift === shift);
+                if (!existsTomorrow) {
+                    const nextDayJob = {
+                        id: 'job-' + Math.random().toString(36).substr(2, 9),
+                        date: nextDateStr,
+                        address,
+                        companyId,
+                        shift,
+                        notes,
+                        internalNotes,
+                        status: 'PENDING',
+                        workers
+                    };
+                    state.jobs.push(nextDayJob);
+                }
             }
 
             saveState();
@@ -1178,6 +1205,37 @@
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
+        }
+
+        function moveJobOrder(jobId, direction) {
+            const job = state.jobs.find(j => j.id === jobId);
+            if (!job) return;
+
+            // Obtenemos todos los trabajos del mismo día y mismo turno
+            let shiftJobs = state.jobs.filter(j => j.date === job.date && j.shift === job.shift);
+            const index = shiftJobs.findIndex(j => j.id === jobId);
+
+            if (index === -1) return;
+
+            if (direction === 'up' && index > 0) {
+                // Intercambiar con el anterior
+                const temp = shiftJobs[index];
+                shiftJobs[index] = shiftJobs[index - 1];
+                shiftJobs[index - 1] = temp;
+            } else if (direction === 'down' && index < shiftJobs.length - 1) {
+                // Intercambiar con el siguiente
+                const temp = shiftJobs[index];
+                shiftJobs[index] = shiftJobs[index + 1];
+                shiftJobs[index + 1] = temp;
+            } else {
+                return;
+            }
+
+            // Reconstruir state.jobs manteniendo los demás días/turnos intactos
+            const otherJobs = state.jobs.filter(j => !(j.date === job.date && j.shift === job.shift));
+            state.jobs = [...otherJobs, ...shiftJobs];
+            saveState();
+            renderApp();
         }
     </script>
 </body>
